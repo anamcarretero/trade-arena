@@ -234,6 +234,26 @@
   .jp-b2 { background: linear-gradient(180deg, #cdecff, #8fd3f7); color: #0b3a5b; }   /* celeste */
   .jp-b3 { background: linear-gradient(180deg, #3a9bff, #1f6bff); color: #fff; }   /* azul */
 
+  /* banner de Kyoru: invita a conocer y descargar la app (no es un anuncio
+     ficticio, por eso no lleva la etiqueta «広告»). Colores fijos en claro y
+     oscuro, al estilo de la tarjeta original de la app. */
+  .kyoru-banner { display: flex; align-items: center; gap: 15px; margin: 12px 0;
+                  padding: 15px 18px; border-radius: 26px; text-decoration: none;
+                  background: linear-gradient(180deg, #eef4fd, #e4edfa);
+                  border: 1px solid rgba(31,107,255,0.10);
+                  box-shadow: 0 1px 1px rgba(11,10,16,0.05), 0 14px 30px -24px rgba(11,10,16,0.55); }
+  .kyoru-banner:active { transform: translateY(1px); }
+  .kyoru-banner .kicon { flex: none; width: 60px; height: 60px; border-radius: 19px;
+                         display: grid; place-items: center; background: #fbfcfe;
+                         box-shadow: 0 2px 6px rgba(11,10,16,0.10); }
+  .kyoru-banner .kicon img { width: 44px; height: 44px; display: block; }
+  .kyoru-banner .ktext { flex: 1 1 0; min-width: 0; }
+  .kyoru-banner .kmain { display: block; font-size: 18px; font-weight: 800;
+                         letter-spacing: 0.01em; line-height: 1.25; color: #12161f; }
+  .kyoru-banner .ksub { display: block; margin-top: 4px; font-size: 13.5px;
+                        font-weight: 500; line-height: 1.35; color: #5d6774; }
+  .kyoru-banner .karrow { flex: none; font-size: 20px; font-weight: 800; color: #2f7fe0; }
+
   /* widget de cartera: gráfico de tarta (cada porción = su peso real) */
   .donut-wrap { display: flex; align-items: center; gap: 18px; margin-top: 16px; }
   .donut { flex: none; display: block; }
@@ -551,6 +571,18 @@
     <div class="wsub" id="pending" style="margin-top:6px"></div>
   </section>
 
+  <!-- banner de Kyoru: presenta y enlaza la descarga de la app; el texto se
+       traduce con data-i18n, así que aparece en inglés y en japonés. -->
+  <a class="kyoru-banner" href="https://imprifyapp.com/kyoru/index.html"
+     target="_blank" rel="noopener noreferrer" data-i18n-aria="kyoruAria">
+    <span class="kicon" aria-hidden="true"><img src="kyoru.png" alt="" width="44" height="44"></span>
+    <span class="ktext">
+      <span class="kmain" data-i18n="kyoruTitle"></span>
+      <span class="ksub" data-i18n="kyoruSub"></span>
+    </span>
+    <span class="karrow" aria-hidden="true">→</span>
+  </a>
+
   <div id="widgets" style="display:grid;gap:12px">
     <section class="card" id="hero-card" style="position:relative">
       <button class="whelp" id="hero-help" type="button" data-i18n-title="calcHelpAria">?</button>
@@ -695,6 +727,9 @@ const I18N = {
     mailBody: "attached are my positions in csv format",
     langBtnLabel: "日本語",
     langBtnAria: "Switch to Japanese",
+    kyoruTitle: "Get the new Kyoru app",
+    kyoruSub: "Open up to the world and step out of yourself.",
+    kyoruAria: "Kyoru: discover and download the app",
     allPlayers: "All players",
     period30: "Last 30 days",
     pendingTitle: "⏳ Awaiting passphrase",
@@ -860,6 +895,9 @@ const I18N = {
     mailBody: "csv形式のポジションを添付します",
     langBtnLabel: "EN",
     langBtnAria: "英語に切り替え",
+    kyoruTitle: "新しいアプリ「Kyoru」を手に入れよう",
+    kyoruSub: "世界にひらいて、「わたし」から一歩そとへ。",
+    kyoruAria: "Kyoru：アプリを知る・ダウンロードする",
     allPlayers: "全プレイヤー",
     period30: "直近30日",
     pendingTitle: "⏳ パスフレーズ待ち",
