@@ -3,7 +3,7 @@
   "awards": [],
   "record": {
     "ticker": "MU",
-    "pct": 17.75,
+    "pct": 18.46,
     "date": "2026-07-30",
     "holders": [
       {
@@ -19,6 +19,18 @@
         "date": "2026-06-15",
         "holders": [],
         "recorded": "2026-07-23"
+      },
+      {
+        "ticker": "MU",
+        "pct": 17.75,
+        "date": "2026-07-30",
+        "holders": [
+          {
+            "id": "fede",
+            "name": "Fede"
+          }
+        ],
+        "recorded": "2026-07-30"
       }
     ]
   }
