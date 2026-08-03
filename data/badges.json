@@ -1,6 +1,17 @@
 {
   "version": 1,
-  "awards": [],
+  "awards": [
+    {
+      "key": "champion:2026-07",
+      "recorded": "2026-08-03",
+      "type": "champion_month",
+      "player": "ana",
+      "name": "Ana",
+      "date": "2026-07-31",
+      "month": "2026-07",
+      "pct": -6.18
+    }
+  ],
   "record": {
     "ticker": "MU",
     "pct": 18.46,
