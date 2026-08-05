@@ -1,232 +1,219 @@
-# Plan de ejecución: TradeArena
+# Plan definitivo de ejecución de TradeArena
 
-## 1. Objetivo y límites del producto
+## 1. Estado y arquitectura objetivo
 
-Transformar el ranking actual en una aplicación de competiciones privadas de
-inversión simulada. Cada participante opera exclusivamente con saldo virtual:
-no hay integración con brókeres, dinero real, retiradas, botes ni premios de
-valor económico. La suscripción compra capacidad de organización del software,
-nunca una participación ni un resultado económico.
-
-La primera versión se centrará en acciones y ETF cotizados en Estados Unidos,
-valorados en USD. El producto se diseñará para incorporar otros mercados,
-monedas e idiomas, pero no los incluirá en el motor inicial.
-
-## 2. Decisiones de producto cerradas
-
-### Competiciones y acceso
-
-- Ligas privadas, accesibles por invitación; no habrá ligas públicas en el MVP.
-- El creador elige libremente fecha y hora de inicio y final. Al comenzar se
-  bloquean calendario y reglas de la competición.
-- Se permiten incorporaciones tardías: la persona empieza con el capital
-  inicial al entrar, su retorno se calcula desde esa fecha y aparece de
-  inmediato en la clasificación con un indicador visible de incorporación.
-- El administrador puede expulsar miembros y revocar invitaciones. Si expulsa
-  a alguien durante una competición, se conserva su historial pero deja de
-  figurar en el ranking activo.
-- El ranking se ordena por rentabilidad porcentual, no por importe ganado.
-- La edad mínima es de 18 años.
-- El lanzamiento comercial empieza en la Unión Europea, con foco en España.
-  La arquitectura queda preparada para otras jurisdicciones; inicialmente la
-  interfaz estará en español e inglés.
-
-### Operativa simulada
-
-- Solo acciones y ETF estadounidenses en USD en la primera versión.
-- Precios retrasados 15 minutos y el mismo retraso para todos los participantes.
-- Se admiten órdenes a mercado y límite; quedan fuera stop-loss, stop-limit,
-  ventas en corto, margen y apalancamiento.
-- Una orden permite elegir sesión regular o incluir premercado y postmercado.
-- Las órdenes fuera de su ventana permitida quedan pendientes.
-- Las ejecuciones son completas o permanecen pendientes; no habrá ejecuciones
-  parciales ni simulación de libro de órdenes o liquidez.
-- Solo se negocian unidades completas.
-- Dividendos y *splits* se aplican automáticamente.
-- Comisión por ejecución: 0,99 USD en sesión regular y 2,99 USD en horario
-  ampliado. Las órdenes no ejecutadas no cobran comisión.
-
-### Planes y monetización
-
-| Plan | Precio | Límites confirmados |
-|---|---:|---|
-| Free | 0 EUR | Una liga activa, hasta 2 jugadores, 1.000 EUR virtuales por persona y duración máxima de 6 semanas. |
-| Friends | 4,99 EUR/mes | Lo paga el creador; hasta 5 jugadores, competiciones de hasta un año y capital virtual configurable por el creador. |
-| Club | 9,99 EUR/mes | Lo paga el creador; hasta 20 jugadores y hasta 5 ligas activas. |
-
-Al terminar un plan de pago, se conserva el acceso de lectura y las
-competiciones en curso pueden finalizar. Se bloquean nuevas ligas, miembros o
-competiciones que excedan el plan aplicable. No se borra historial ni se
-expulsa automáticamente a participantes.
-
-### Proveedores y avisos
-
-- Usar datos gratuitos solo durante desarrollo y beta cerrada. Antes de abrir
-  el producto al público, contratar un proveedor con licencia comercial y
-  cotizaciones retrasadas 15 minutos.
-- Autenticación inicial mediante enlace seguro por email y Google; preparar la
-  incorporación de Apple para las aplicaciones móviles.
-- Los avisos iniciales serán solo dentro de la aplicación: invitaciones,
-  cambios de miembros, inicio y fin de competición, estados de órdenes,
-  ejecuciones límite y cambios relevantes de suscripción. No se enviará email
-  en esta primera versión.
-
-## 3. Principios de arquitectura obligatorios
-
-Se construirá un monolito modular, suficiente para las primeras centenas o
-miles de personas usuarias. Cada responsabilidad se aislará tras contratos
-internos estables: el dominio no debe depender de proveedores concretos.
-
-- Autenticación, datos de mercado, facturación, almacenamiento, correo,
-  notificaciones y cola se implementarán mediante adaptadores.
-- Sustituir un proveedor supone cambiar su adaptador y sus pruebas de contrato,
-  no reescribir ligas, órdenes, carteras ni rankings.
-- Separar por responsabilidad: dominio, aplicación/casos de uso, puertos,
-  adaptadores de infraestructura y presentación.
-- API REST versionada y documentada con OpenAPI.
-- PostgreSQL como fuente de verdad; los workers ejecutan precios, órdenes,
-  valoraciones y rankings fuera de las peticiones web.
-- Comenzar con una web responsive/PWA y compartir contrato API, tipos y diseño
-  con las futuras aplicaciones Android e iOS.
-
-Arquitectura de referencia:
+TradeArena evoluciona como un monolito modular con el dominio financiero
+Python independiente. Las Fases 0–2 están terminadas: existen reglas v1,
+dominio reproducible, casos de uso de cuentas y ligas, API transportable,
+contrato OpenAPI y migración PostgreSQL inicial. El siguiente trabajo es
+TA-030: hacer ejecutables FastAPI y PostgreSQL.
 
 ```text
-PWA web ──────┐
-              ├─ API versionada ─ PostgreSQL
-Apps móviles ─┘        │
-                         ├─ identidad (adaptador)
-                         ├─ facturación (adaptador)
-                         ├─ datos de mercado (adaptador)
-                         ├─ cola y workers
-                         └─ notificaciones (adaptador)
+Next.js PWA/BFF — Vercel
+        │
+FastAPI — Cloud Run Service
+        │
+PostgreSQL — Neon Frankfurt
+        │
+Cloud Run Jobs — precios, órdenes, valoraciones y rankings
 ```
 
-## 4. Modelo de datos mínimo
+La plataforma prevista usa Vercel, Neon y Google Cloud. Se mantienen Auth0 EU
+para identidad, Massive para datos de mercado sujetos a licencia y Stripe para
+facturación. El ranking histórico de `trader/`, sus datos cifrados y GitHub
+Pages seguirán funcionando hasta la retirada deliberada de la Fase 7.
 
-- Usuarios, perfiles, consentimiento, sesiones y auditoría de accesos.
-- Ligas, miembros, roles e invitaciones con caducidad y revocación.
-- Competiciones y una instantánea inmutable de sus reglas.
-- Carteras virtuales, cuentas de efectivo, órdenes, ejecuciones y libro mayor
-  inmutable.
-- Instrumentos, precios históricos, calendarios de mercado y eventos
-  corporativos.
-- Snapshots de valoración y ranking reproducibles.
-- Suscripciones, derechos de plan y eventos de facturación.
-- Notificaciones internas y su estado de lectura.
+## 2. Decisiones técnicas cerradas
 
-Los límites de planes, altas, invitaciones y creación de competiciones se
-validarán transaccionalmente en el servidor para evitar carreras de concurrencia.
+- `web/`: Next.js, TypeScript, App Router, PWA responsive ES/EN y `pnpm`.
+- `tradearena/`: dominio, aplicación, puertos, adaptadores y presentación
+  FastAPI. Las reglas financieras no se duplican en TypeScript.
+- PostgreSQL 16 mediante `psycopg` 3. Los servicios síncronos se exponen con
+  rutas síncronas de FastAPI para no introducir una reescritura asíncrona.
+- `Store` evolucionará a una unidad de trabajo con repositorios tipados.
+  `MemoryStore` y `PostgresStore` pasarán las mismas pruebas de contrato.
+- Las migraciones SQL son incrementales y se aplican con
+  `python3 -m tradearena migrate`. No se introduce Alembic mientras el esquema
+  sea pequeño y las migraciones existentes sigan siendo SQL explícito.
+- La PWA funciona como BFF: mantiene una sesión cifrada `HttpOnly` y llama a
+  Cloud Run desde servidor. El navegador nunca recibe credenciales de Neon ni
+  el token interno de la API.
+- Auth0 Universal Login proporciona email y Google. La API valida la aserción,
+  enlaza la identidad local y emite la sesión opaca y revocable de TradeArena.
+- Producción y staging usan Neon `aws-eu-central-1` y Cloud Run
+  `europe-west3`, ambos en Frankfurt. Los secretos viven en Secret Manager y
+  GitHub Actions usa OIDC, no claves persistentes de GCP.
+- FastAPI se ejecuta como Cloud Run Service con escala a cero. Precios,
+  órdenes, eventos corporativos, valoración y rankings se ejecutan como Cloud
+  Run Jobs independientes, finitos e idempotentes, activados por Cloud
+  Scheduler. No habrá worker pools permanentes en el MVP.
+- Cada PR de interfaz recibe una preview de Vercel. Los PR que cambien backend,
+  persistencia o migraciones crean una rama Neon efímera para CI, aplican las
+  migraciones y la eliminan al cerrar el PR. No se despliega una API por PR.
+- Staging integrado se actualiza después de fusionar en `main`. Producción
+  requiere promoción explícita y todas las puertas legales y operativas.
 
-## 5. Fases de ejecución
+## 3. Secuencia de implementación
 
-### Fase 0 — Especificación y cumplimiento
+### Fase 3.0 — Consolidación y línea base
 
-1. Convertir las decisiones anteriores en reglas versionadas del producto.
-2. Definir formalmente precios, redondeos, zonas horarias, calendario de
-   mercado, expiración de órdenes, dividendos, *splits*, suspensiones y
-   tratamiento de datos ausentes.
-3. Seleccionar proveedores con contratos compatibles con los adaptadores:
-   identidad, precios, pagos, hosting y cola.
-4. Preparar términos, privacidad, política de edad y revisión legal para el
-   lanzamiento UE/España.
+1. Mantener este documento como único plan canónico y retirar planes antiguos.
+2. Actualizar arquitectura, casos de uso, proveedores, cumplimiento y backlog
+   cuando cambie una decisión de infraestructura o producto.
+3. Fijar Python y todas las dependencias; hacer reproducibles local y CI.
+4. Mantener intactos `trader/`, los extractos cifrados y los artefactos
+   generados.
 
-**Salida:** especificación de reglas, contratos de proveedor y backlog
-priorizado.
+**Salida:** pruebas Python y ranking histórico offline ejecutables desde un
+entorno limpio, sin decisiones documentales contradictorias.
 
-### Fase 1 — Núcleo financiero reproducible
+### Fase 3.1 — TA-030: PostgreSQL y FastAPI reales
 
-1. Extraer la lógica financiera actual de CSV, artefactos estáticos y GitHub
-   Pages hacia el dominio independiente.
-2. Implementar cartera virtual, libro mayor, órdenes, ejecuciones y comisiones.
-3. Añadir un adaptador de precios de prueba y *fixtures* deterministas.
-4. Cubrir con pruebas rendimiento, comisiones, redondeos, sesiones, órdenes
-   límite, dividendos y *splits*.
-5. Definir snapshots de cartera y ranking reproducibles.
+1. Introducir unidad de trabajo y repositorios; impedir que los servicios
+   accedan a diccionarios internos del adaptador.
+2. Implementar `PostgresStore`, transacciones y bloqueo concurrente de límites
+   Free, con pruebas contra PostgreSQL 16.
+3. Envolver el dispatcher en FastAPI y completar validación, autenticación,
+   errores, `/health/live` y `/health/ready`.
+4. Comprobar automáticamente la coherencia entre `openapi.yaml` y la
+   aplicación.
+5. Añadir imagen OCI sin privilegios y comandos separados para API y
+   migraciones.
 
-**Criterio de aceptación:** con la misma secuencia de órdenes, eventos y
-precios, el resultado es idéntico en cada ejecución.
+**Salida:** API v1 ejecutable con persistencia real, autorización entre ligas,
+OpenAPI coherente y suite completa verde.
 
-### Fase 2 — Backend, cuentas y autorización
+### Fase 3.2 — PWA: acceso, perfil y ligas
 
-1. Crear el esquema PostgreSQL y las migraciones.
-2. Implementar acceso por enlace seguro de email y Google detrás de un puerto
-   de identidad.
-3. Añadir perfiles, borrado de cuenta y exportación de datos.
-4. Implementar ligas privadas, miembros, roles e invitaciones.
-5. Aplicar autorización estricta por pertenencia y límites Free en servidor.
+1. Crear Next.js/PWA con tokens de diseño, accesibilidad base,
+   internacionalización ES/EN y cliente generado desde OpenAPI.
+2. Integrar Auth0 mediante el BFF y sesión `HttpOnly`.
+3. Implementar alta, perfil, edad, consentimiento, ligas, invitaciones,
+   miembros, exportación y borrado.
+4. Añadir E2E de dos personas y de acceso directo a una liga ajena.
 
-**Criterio de aceptación:** nadie puede leer, modificar o unirse a recursos de
-otra liga sin autorización, incluso invocando la API directamente.
+**Salida:** dos cuentas pueden crear y gestionar una liga privada desde la PWA
+sin exponer secretos ni confiar autorización al cliente.
 
-### Fase 3 — PWA MVP
+### Fase 3.3 — Competiciones, cartera y ranking
 
-1. Registro, incorporación y selección de idioma.
-2. Crear liga, invitar, aceptar y gestionar miembros.
-3. Crear competición y confirmar una instantánea de reglas.
-4. Consultar cartera, enviar órdenes e inspeccionar historial.
-5. Mostrar ranking, evolución, fecha de incorporación y reglas visibles.
-6. Añadir centro de avisos interno, privacidad y eliminación de cuenta.
+1. Extender migraciones, servicios y OpenAPI para competiciones,
+   `rules_snapshot`, participantes tardíos, carteras, órdenes, ejecuciones,
+   historial y ranking.
+2. Implementar en la PWA creación y comienzo de competición, envío y
+   cancelación de órdenes, cartera, historial y ranking.
+3. Mantener inmutables las reglas tras el inicio y responder `404` a recursos
+   de ligas ajenas.
 
-**Criterio de aceptación:** dos personas pueden crear una liga, competir hasta
-el final y consultar un ranking consistente desde la PWA.
+**Salida:** dos participantes completan una competición con fixtures de precio
+deterministas y obtienen el mismo ranking reproducible.
+
+### Fase 3.4 — Infraestructura y entrega continua
+
+1. Definir como código Artifact Registry, Cloud Run, Scheduler, IAM, Secret
+   Manager, Neon y la configuración necesaria de Vercel.
+2. CI por PR: Python, TypeScript, lint, unitarias, contrato OpenAPI,
+   PostgreSQL aislado y E2E cuando corresponda.
+3. Tras cada merge: migración compatible hacia delante, API staging, PWA
+   staging y smoke tests.
+4. En producción, aplicar primero migraciones compatibles, desplegar API y
+   promover después la PWA. Las migraciones destructivas usan expand/contract
+   en cambios separados.
+
+**Salida:** staging reproducible y procedimiento probado de despliegue y
+rollback; producción continúa cerrada.
 
 ### Fase 4 — Mercado y trabajos en segundo plano
 
-1. Integrar el proveedor autorizado mediante su adaptador.
-2. Ingerir precios, controlar calidad y almacenar trazabilidad.
-3. Ejecutar workers idempotentes con cola, reintentos y alertas.
-4. Programar ejecución de órdenes, valoración y snapshots de ranking.
-5. Gestionar fallos temporales de mercado sin duplicar ejecuciones ni corromper
-   el ranking.
+1. Mantener fixtures durante desarrollo. Yahoo no se usa en TradeArena nuevo.
+2. Integrar Massive únicamente después de confirmar por escrito la licencia
+   de visualización y retraso uniforme.
+3. Añadir outbox PostgreSQL y jobs separados para precios/calendario,
+   ejecución, eventos corporativos, valoración y rankings.
+4. Reclamar trabajo con bloqueo seguro, clave de idempotencia, reintentos
+   limitados, métricas y auditoría.
+5. Ante datos ausentes, dejar la orden pendiente y no fabricar precios ni
+   snapshots.
 
-**Criterio de aceptación:** una interrupción temporal del proveedor no pierde
-órdenes ni genera una operación doble.
+**Salida:** una interrupción o repetición no pierde trabajo ni duplica
+ejecuciones, apuntes o snapshots.
 
-### Fase 5 — Monetización
+### Fase 5 — Facturación y beta
 
-1. Implementar derechos de producto y límites por plan.
-2. Añadir checkout web, portal de facturación y webhooks firmados e
-   idempotentes.
-3. Implementar upgrade, cancelación y degradación sin pérdida de datos.
-4. Antes de vender capacidades de pago en apps móviles, integrar las compras
-   nativas requeridas por cada tienda.
+1. Activar derechos Friends/Club y límites transaccionales.
+2. Integrar Stripe Checkout, portal y webhooks firmados e idempotentes.
+3. Completar observabilidad, rate limits, seguridad de sesión, CORS/CSRF,
+   carga, restauración, accesibilidad WCAG 2.2 AA y respuesta a incidentes.
+4. Bloquear pagos y apertura pública hasta disponer de licencia de mercado,
+   DPA, DPIA/ROPA, textos ES/EN y aprobación legal para España/UE.
 
-**Criterio de aceptación:** el plan efectivo deriva exclusivamente de eventos
-de facturación validados por el servidor.
+### Fases 6–7 — Móvil y retirada del legado
 
-### Fase 6 — Aplicaciones móviles
+1. Crear Expo/iOS/Android solo después de estabilizar la beta web.
+2. No migrar extractos, operaciones ni importes reales. Como máximo, migrar
+   porcentajes históricos con consentimiento explícito.
+3. Retirar `trader/`, IMAP y GitHub Pages solo mediante un proyecto separado
+   cuando el producto nuevo sea estable.
 
-1. Crear cliente Expo para iPhone y Android.
-2. Compartir cliente API, modelos y sistema de diseño con la PWA.
-3. Cubrir acceso, ligas, ranking, cartera y órdenes.
-4. Mantener notificaciones push como ampliación posterior a los avisos internos.
+## 4. Verificación y aceptación
 
-### Fase 7 — Migración y retirada del flujo anterior
+- Pruebas unitarias deterministas de dinero, órdenes, ledger, eventos y ranking.
+- Mismas pruebas de contrato para memoria y PostgreSQL.
+- Integración con PostgreSQL real, concurrencia de límites Free y rollback.
+- Validación de OpenAPI y del cliente TypeScript generado.
+- E2E de acceso, invitación, competición, orden, ejecución y ranking con dos
+  participantes.
+- Pruebas negativas de autorización, edad, sesión revocada, invitación ajena y
+  privacidad.
+- Repetir o interrumpir jobs no duplica ejecuciones, ledger ni snapshots.
+- Migraciones verificadas sobre esquema vacío y sobre la versión anterior.
+- Smoke tests de staging y restauración ensayada antes de beta.
+- En cada fase deben pasar `python3 -m pytest tests/ -q`, el ranking histórico
+  offline y, cuando exista, la verificación completa de la PWA.
+- Todo cambio de rutas, contratos, despliegue, secretos, privacidad o reglas
+  financieras actualiza en el mismo cambio `doc/arquitectura.md` y
+  `doc/casos-de-uso.md`.
 
-1. Mantener el ranking histórico separado durante la estabilización.
-2. No migrar perfiles ni datos financieros sin consentimiento explícito.
-3. Retirar gradualmente CSV, correo operativo, GitHub Pages y los flujos del
-   repositorio cuando el nuevo producto sea estable.
+## 5. Ejecución con el modo objetivo de Codex
 
-## 6. Orden inmediato de trabajo
+Se usa un objetivo por bloque anterior, nunca un único objetivo para todo el
+producto. Cada objetivo se ejecuta en una rama `codex/<objetivo>` o worktree
+independiente, termina con pruebas y documentación, y se fusiona antes de
+abrir el siguiente. Dos objetivos no deben editar simultáneamente los mismos
+archivos.
 
-1. Cerrar la especificación de Fase 0 y registrar las reglas como pruebas.
-2. Extraer y probar el núcleo financiero.
-3. Crear base de datos, autenticación y autorización.
-4. Implementar ligas, invitaciones y límites Free.
-5. Construir la PWA MVP.
-6. Activar workers de precios, ejecución y rankings.
-7. Añadir facturación.
-8. Construir los clientes móviles.
-9. Ejecutar pruebas de seguridad, carga, accesibilidad y revisión legal antes
-   de abrir pagos al público.
+Secuencia recomendada:
 
-## 7. Riesgos que deben verificarse antes de lanzar
+1. consolidación y entorno reproducible;
+2. TA-030, PostgreSQL y FastAPI;
+3. PWA de acceso, perfil y ligas;
+4. competiciones, cartera y ranking;
+5. infraestructura y staging;
+6. mercado y jobs;
+7. Stripe y preparación de beta.
 
-- Licencia del proveedor para mostrar y redistribuir cotizaciones a usuarios.
-- Cumplimiento de privacidad, consumo, fiscalidad y pagos en cada región de
-  lanzamiento.
-- Reglas de compra dentro de las tiendas móviles para funciones de pago.
-- Idempotencia, auditoría y recuperación ante fallos de los workers.
-- Accesibilidad, seguridad de sesiones y aislamiento entre ligas.
+Cada `/goal` debe expresar resultado, límites y verificación, y referenciar
+este documento en vez de copiar toda la especificación. Ejemplo para el
+siguiente bloque:
+
+```text
+/goal Implementa TA-030 conforme a doc/plan-ejecucion-tradearena.md: unidad de
+trabajo y repositorios, adaptadores Memory/PostgreSQL equivalentes, migraciones
+incrementales, servidor FastAPI, sesión revocable, health checks, contenedor y
+pruebas de integración PostgreSQL. Conserva el dominio financiero independiente
+y la autorización 404 entre ligas. Termina con OpenAPI coherente, suite completa
+verde y documentación actualizada.
+```
+
+## 6. Supuestos y puertas
+
+- Este documento sustituye los dos planes anteriores.
+- Vercel, Neon y Google Cloud son la plataforma de despliegue; Auth0, Massive
+  y Stripe se mantienen.
+- Las previews iniciales son PWA en Vercel más PostgreSQL aislado en CI, no
+  entornos full-stack por PR.
+- Se priorizan servicios con escala a cero y jobs programados frente a workers
+  permanentes.
+- Las reglas v1, precios comerciales y alcance España/UE permanecen como están
+  en la especificación versionada.
+- El legado continúa operativo y separado hasta la Fase 7.

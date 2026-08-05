@@ -1,6 +1,6 @@
 # Selección de proveedores y contratos internos
 
-La selección técnica queda cerrada para desarrollar las fases 0–2. La
+La selección técnica queda cerrada para desarrollar las fases 0–3. La
 activación pública sigue condicionada a DPA, revisión legal y, para mercado, un
 contrato firmado que permita mostrar datos a usuarios finales.
 
@@ -9,12 +9,14 @@ contrato firmado que permita mostrar datos a usuarios finales.
 | Identidad | Auth0 EU, email sin contraseña y Google OIDC | `IdentityPort`; Apple se añadirá con el mismo `IdentityAssertion`. El adaptador local HMAC sirve solo desarrollo. |
 | Mercado | Massive Stocks Business con el *feed* licenciado que autorice display y retraso uniforme | `MarketDataPort` en Fase 4. No se usarán planes personales ni Yahoo en el producto nuevo. Go-live bloqueado hasta confirmación escrita de redistribución, mercados, sesiones y usuarios no profesionales. |
 | Facturación | Stripe Billing y Customer Portal | `BillingPort` en Fase 5; los derechos derivarán de webhooks firmados e idempotentes, nunca del cliente. |
-| Hosting y PostgreSQL | Render, región Frankfurt | Web, worker y PostgreSQL en la misma región/red privada; plan de pago con recuperación a punto en el tiempo antes de beta con datos personales. |
-| Cola | Tabla *outbox* PostgreSQL y worker Render inicialmente | `QueuePort`; evita otro almacén en el MVP. Migrable a cola gestionada si carga o latencia lo exige. |
+| Interfaz | Vercel | Next.js/PWA y previews por rama. El BFF conserva la sesión; no se conecta desde el navegador a PostgreSQL. |
+| PostgreSQL | Neon, AWS Frankfurt (`aws-eu-central-1`) | Fuente de verdad para staging/producción. Ramas efímeras solo en CI para PR con backend o migraciones; recuperación probada antes de beta. |
+| API | Google Cloud Run Service, Frankfurt (`europe-west3`) | FastAPI con escala a cero. Secretos en Secret Manager y despliegue desde GitHub mediante OIDC. |
+| Trabajos y cola | Outbox PostgreSQL, Cloud Run Jobs y Cloud Scheduler | `QueuePort`; procesos finitos e idempotentes para precios, órdenes, valoración y ranking. Sin worker permanente en el MVP. |
 | Email | Plantillas de Auth0 solo para acceso | `IdentityPort`; no se usa para avisos de producto en v1. |
 | Notificaciones | Base de datos y centro interno | `NotificationPort` en Fase 3; sin push ni email en v1. |
 
-Fuentes de decisión consultadas el 4 de agosto de 2026:
+Fuentes de decisión consultadas el 5 de agosto de 2026:
 
 - Auth0 documenta el inicio passwordless por enlace o código:
   <https://auth0.com/docs/api/authentication/passwordless/get-code-or-link>.
@@ -24,10 +26,13 @@ Fuentes de decisión consultadas el 4 de agosto de 2026:
   <https://massive.com/terms/market_data_terms.pdf>.
 - Stripe prescribe gestionar suscripciones desde webhooks y verificar su
   origen: <https://docs.stripe.com/billing/subscriptions/webhooks>.
-- Render ofrece Frankfurt, workers y PostgreSQL con PITR en planes de pago:
-  <https://render.com/docs/regions>,
-  <https://render.com/docs/background-workers> y
-  <https://render.com/docs/postgresql-backups>.
+- Vercel genera previews por push o PR: <https://vercel.com/docs/git>.
+- Neon ofrece ramas de base de datos y automatización de entornos de preview:
+  <https://neon.com/docs/guides/branching-intro>.
+- Cloud Run separa servicios HTTP, jobs finitos y worker pools; Scheduler puede
+  invocar trabajo autenticado:
+  <https://docs.cloud.google.com/run/docs/overview/what-is-cloud-run> y
+  <https://docs.cloud.google.com/run/docs/triggering/using-scheduler>.
 
 ## Contratos de los puertos
 
@@ -38,6 +43,11 @@ calidad. Facturación entregará un id global de evento, firma verificada, dueñ
 producto, estado y periodo. Cola exigirá clave de idempotencia, disponibilidad,
 número de intento y acuse transaccional. Los adaptadores tienen pruebas de
 contrato antes de sustituirse.
+
+Vercel no forma parte del contrato de persistencia y Neon no se expone a la
+PWA. El BFF llama a FastAPI; FastAPI y los jobs son los únicos componentes que
+usan `DATABASE_URL`. Los procesos de fondo comparten imagen y dominio, pero se
+despliegan con puntos de entrada y permisos separados.
 
 ## Puertas obligatorias de lanzamiento
 

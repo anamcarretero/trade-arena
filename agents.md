@@ -21,7 +21,7 @@ comando `ranking`.
 - No edites manualmente `docs/index.html`, `docs/ranking.md`,
   `data/public/`, `data/prices/` o `data/badges.json` salvo que el encargo sea
   precisamente una corrección de datos generados. En condiciones normales se
-  producen con `python -m trader ranking`.
+  producen con `python3 -m trader ranking`.
 - Conserva la compatibilidad del formato de cifrado de `trader/secretbox.py`;
   ya existen extractos cifrados versionados que deben seguir leyéndose.
 - Los importes solo pueden aparecer en salidas públicas cuando
@@ -33,12 +33,14 @@ comando `ranking`.
 
 ## Verificación mínima
 
-Ejecuta `python -m pytest tests/ -q` cuando el entorno tenga las dependencias.
+Usa Python 3.12, fijado en `.python-version`, e instala `requirements.txt` en
+un entorno virtual. Ejecuta `python3 -m pytest tests/ -q` cuando el entorno
+tenga las dependencias.
 Para validar el pipeline sin red ni secretos, usa:
 
 ```bash
-python -m trader ranking --players-dir examples/players --prices-dir examples/prices --offline
+python3 -m trader ranking --players-dir examples/players --prices-dir examples/prices --offline
 ```
 
-Si el ejecutable local se llama `python3`, úsalo de forma equivalente. Antes
-de entregar cambios, informa si no fue posible ejecutar las pruebas y por qué.
+Antes de entregar cambios, informa si no fue posible ejecutar las pruebas y
+por qué.

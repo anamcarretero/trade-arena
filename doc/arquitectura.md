@@ -104,6 +104,32 @@ mercado, snapshots, facturación y notificaciones. Los límites Free se vuelven 
 validar dentro de la transacción de aplicación; los índices SQL son una segunda
 defensa, no el único control.
 
+### Despliegue objetivo de TradeArena
+
+```mermaid
+flowchart LR
+  B["Navegador"] --> W["Next.js PWA/BFF en Vercel"]
+  W --> A["FastAPI en Cloud Run Service"]
+  A --> N["PostgreSQL Neon — Frankfurt"]
+  S["Cloud Scheduler"] --> J["Cloud Run Jobs"]
+  J --> N
+  M["Massive con licencia"] --> J
+```
+
+- Vercel sirve la PWA, crea previews por rama y conserva la sesión en el BFF;
+  el navegador no se conecta a PostgreSQL ni recibe el token interno de API.
+- FastAPI se desplegará en un Cloud Run Service con escala a cero cuando
+  TA-030 proporcione un servidor ASGI y un adaptador PostgreSQL ejecutables.
+- Neon `aws-eu-central-1` es la fuente de verdad. Los PR que cambien backend o
+  migraciones usarán una rama efímera solo para integración en CI; las previews
+  de interfaz no acceden directamente a esa rama.
+- Precios, órdenes, eventos corporativos, valoraciones y rankings se ejecutarán
+  como Cloud Run Jobs finitos, separados e idempotentes. Cloud Scheduler los
+  invocará con identidad de servicio; no se mantendrán workers permanentes en
+  el MVP.
+- Staging usa Cloud Run `europe-west3` y Neon en Frankfurt. Secret Manager
+  conserva credenciales y GitHub Actions accede a GCP mediante OIDC.
+
 ### Datos y contratos principales
 
 `players/<id>/player.json` define `display_name`, `currency` y
@@ -157,6 +183,12 @@ Los workflows de ingesta y ranking usan grupos de concurrencia y reintentos de
 La carpeta `docs/` es la raíz configurada para GitHub Pages; no confundirla con
 `doc/`, que contiene documentación de mantenimiento.
 
+La automatización anterior pertenece al legado. TradeArena añadirá CI de
+backend/PWA, ramas Neon efímeras para integración y despliegue de staging tras
+fusionar. Vercel gestionará las previews de la PWA; Cloud Run no se desplegará
+por PR. La promoción de producción será explícita y permanecerá bloqueada por
+las puertas legales, de licencia y recuperación.
+
 ## Seguridad y operaciones
 
 - `TRADER_KEY` es el secreto de liga compartido. En CI permite descifrar todos
@@ -175,11 +207,16 @@ La carpeta `docs/` es la raíz configurada para GitHub Pages; no confundirla con
 ## Verificación local
 
 ```bash
-python -m pytest tests/ -q
-python -m trader ranking --players-dir examples/players --prices-dir examples/prices --offline
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r requirements.txt
+python3 -m pytest tests/ -q
+python3 -m trader ranking --players-dir examples/players --prices-dir examples/prices --offline
 ```
 
-El segundo comando usa datos ficticios y no requiere red ni secretos. Para
+`.python-version` fija Python 3.12, `requirements.in` declara dependencias
+directas y `requirements.txt` fija la resolución completa que usa CI. El
+último comando usa datos ficticios y no requiere red ni secretos. Para
 probar una modificación de privacidad o de la web, inspecciona también el
 `docs/index.html` regenerado y los JSON de `data/public/` antes de incluirlos
 en un cambio.

@@ -13,6 +13,7 @@
 - TA-022 perfil, edad, exportación y borrado de cuenta.
 - TA-023 ligas privadas, roles, invitación/caducidad/revocación y expulsión.
 - TA-024 autorización por pertenencia y límites Free en transacción y API v1.
+- TA-025 plan canónico, Python 3.12 y dependencias reproducibles en local y CI.
 
 ## Siguiente — Fase 3
 
@@ -24,11 +25,14 @@
 5. TA-034 cartera, orden, historial, ranking y marca de incorporación tardía.
 6. TA-035 centro de notificaciones, exportación y borrado desde la PWA.
 7. TA-036 accesibilidad WCAG 2.2 AA y pruebas E2E de dos participantes.
+8. TA-037 staging reproducible: Vercel, Neon Frankfurt, Cloud Run Frankfurt,
+   Secret Manager y GitHub OIDC; ramas Neon efímeras para integración en PR.
 
 ## Fases 4–7
 
-- Integrar datos licenciados y calendario; outbox/workers idempotentes;
-  ejecución, valoración y ranking con reintentos y alertas.
+- Integrar datos licenciados y calendario; outbox PostgreSQL y Cloud Run Jobs
+  idempotentes para ejecución, valoración y ranking, con Scheduler, reintentos
+  y alertas.
 - Activar Stripe, derechos por eventos validados y compras nativas cuando
   proceda.
 - Crear clientes Expo compartiendo OpenAPI, tipos y diseño.

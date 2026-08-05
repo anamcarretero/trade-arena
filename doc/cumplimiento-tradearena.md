@@ -33,7 +33,8 @@ activen sin revisión UE/España.
 | Facturación futura | cliente, plan, estado, ids de evento; no tarjeta | contrato y obligaciones fiscales | plazos fiscales aplicables |
 | Operación y seguridad | logs, eventos de acceso, incidencias | interés legítimo | ventana definida por riesgo y minimización |
 
-Encargados previstos: Auth0, Render, Stripe y proveedor de mercado. Antes de
+Encargados previstos: Auth0, Vercel, Neon, Google Cloud, Stripe y proveedor de
+mercado. Antes de
 producción se documentarán entidad contratante, región, subencargados,
 transferencias internacionales, DPA, medidas y procedimiento de derechos. No
 se usarán datos financieros reales del ranking histórico para crear cuentas

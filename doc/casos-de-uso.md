@@ -34,6 +34,22 @@ La PWA todavía no forma parte de estas fases. El contrato HTTP está en
 `tradearena/presentation/openapi.yaml` y sus pruebas de abuso directo en
 `tests/tradearena/test_authorization.py`.
 
+### Flujo de desarrollo y preview de Fase 3
+
+1. Cada cambio se valida con Python 3.12 y las versiones exactas de
+   `requirements.txt`.
+2. Un PR de interfaz obtiene una preview Vercel que consume fixtures o el API
+   integrado de staging mediante el BFF; nunca abre una conexión del navegador
+   a PostgreSQL.
+3. Si el PR cambia backend, persistencia o migraciones, CI crea una rama Neon
+   efímera, aplica todas las migraciones, ejecuta las pruebas de integración y
+   elimina la rama al cerrar el PR.
+4. No se crea una API Cloud Run por PR. Tras fusionar en `main`, se despliega
+   staging, se ejecutan smoke tests y solo entonces el cambio puede promoverse.
+5. Producción sigue bloqueada hasta superar revisión legal, licencia de mercado,
+   DPA, restauración y seguridad. El ranking histórico continúa en GitHub Pages
+   durante toda esta transición.
+
 ## 1. Alta de un jugador y carga por email
 
 Es el flujo preferente porque no concede acceso al repositorio.
@@ -108,7 +124,7 @@ El comando hace lo siguiente:
 Para una prueba completamente aislada de la red y de extractos reales:
 
 ```bash
-python -m trader ranking --players-dir examples/players \
+python3 -m trader ranking --players-dir examples/players \
   --prices-dir examples/prices --offline
 ```
 
