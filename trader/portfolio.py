@@ -89,9 +89,20 @@ def holdings_value(
         return {}
 
     days = [ev.day for ev in events]
-    last = until or max(max(days), date.today())
-
     tickers = {ev.ticker for ev in events if ev.ticker and ev.kind in (BUY, SELL, SPLIT)}
+    if until is not None:
+        last = until
+    elif prices.offline and tickers:
+        # Una fixture offline es una fotografía cerrada. Valorar siempre contra
+        # ``date.today()`` hacía que el mismo pipeline dejase de ser reproducible
+        # ocho días después de su último precio. Se usa la última fecha común
+        # disponible; ``close_on`` puede arrastrar festivos como hasta ahora.
+        latest = [prices.latest_day(ticker) for ticker in tickers]
+        available = [day for day in latest if day is not None]
+        last = min(available) if len(available) == len(tickers) else max(days)
+    else:
+        last = max(max(days), date.today())
+
     for ticker in tickers:
         prices.ensure_range(ticker, min(days), last)
 

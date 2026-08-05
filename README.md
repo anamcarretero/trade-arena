@@ -152,13 +152,21 @@ Para cada día natural se calcula:
 ## Empezar
 
 ```bash
-pip install -r requirements.txt
-python -m pytest tests/ -q          # comprobar que todo funciona
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r requirements.txt
+python3 -m pytest tests/ -q          # comprobar que todo funciona
 
 # Probar con el jugador de ejemplo (sin red):
-python -m trader ranking --players-dir examples/players \
+python3 -m trader ranking --players-dir examples/players \
     --prices-dir examples/prices --offline
 ```
+
+El proyecto fija Python en `.python-version`, las dependencias directas en
+`requirements.in` y la resolución completa en `requirements.txt`. Las
+actualizaciones de dependencias son deliberadas: se cambia `requirements.in`,
+se regenera el fichero resuelto con Python 3.12 y se ejecuta toda la
+verificación antes de aceptar las nuevas versiones.
 
 ### Unirse a la competición
 

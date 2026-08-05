@@ -1,0 +1,4 @@
+# Dependencias directas. Actualiza este archivo y regenera requirements.txt
+# dentro de Python 3.12 cuando se quiera hacer un upgrade deliberado.
+cryptography==50.0.0
+pytest==9.1.1

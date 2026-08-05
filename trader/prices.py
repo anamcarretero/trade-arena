@@ -147,6 +147,11 @@ class PriceCache:
         series = self._load(ticker)
         return [(day, series[day]) for day in sorted(series) if start <= day <= end]
 
+    def latest_day(self, ticker: str) -> date | None:
+        """Última sesión disponible en caché, sin descargar datos."""
+        series = self._load(ticker)
+        return max(series) if series else None
+
     # ------------------------------------------------------------ lookup
     def close_on(self, ticker: str, day: date) -> float:
         """Cierre del día, o el último cierre anterior (fines de semana, festivos)."""

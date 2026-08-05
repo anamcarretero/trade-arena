@@ -1,0 +1,1 @@
+"""Adaptadores intercambiables de infraestructura."""

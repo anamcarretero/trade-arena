@@ -1,0 +1,44 @@
+name: Verificación de pull request
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: python -m pip install -r requirements.txt
+
+      - name: Ejecutar pruebas
+        run: python -m pytest tests/ -q
+
+      - name: Validar ranking histórico offline
+        shell: bash
+        run: |
+          output_dir="$(mktemp -d)"
+          trap 'rm -rf "$output_dir"' EXIT
+          python -m trader ranking \
+            --players-dir examples/players \
+            --prices-dir examples/prices \
+            --analysts-dir "$output_dir/analysts" \
+            --public-dir "$output_dir/public" \
+            --badges-file "$output_dir/badges.json" \
+            --out "$output_dir/ranking.md" \
+            --html-out "$output_dir/index.html" \
+            --pending-out "$output_dir/pending.json" \
+            --offline
