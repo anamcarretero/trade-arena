@@ -15,17 +15,24 @@
 - TA-024 autorización por pertenencia y límites Free en transacción y API v1.
 - TA-025 plan canónico, Python 3.12 y dependencias reproducibles en local y CI.
 
-## Siguiente — Fase 3
+## Terminado — Fase 3
 
 1. TA-030 servidor ASGI y adaptador PostgreSQL con pruebas de integración y
-   políticas de bloqueo concurrente.
-2. TA-031 PWA responsive bilingüe: acceso, perfil y selección de idioma.
-3. TA-032 creación de liga, invitaciones y administración de miembros.
-4. TA-033 competición y confirmación visible de `rules_snapshot`.
-5. TA-034 cartera, orden, historial, ranking y marca de incorporación tardía.
-6. TA-035 centro de notificaciones, exportación y borrado desde la PWA.
-7. TA-036 accesibilidad WCAG 2.2 AA y pruebas E2E de dos participantes.
-8. TA-037 staging reproducible: Vercel, Neon Frankfurt, Cloud Run Frankfurt,
+   políticas de bloqueo concurrente. Implementados FastAPI, health checks,
+   coherencia de rutas con OpenAPI, unidad de trabajo, repositorios equivalentes
+   en memoria/PostgreSQL, migraciones incrementales e imagen OCI sin
+   privilegios. Verificados migración, rollback, concurrencia, contenedor y API
+   contra PostgreSQL 16 real; CI reproduce la misma integración.
+
+## Siguiente — Fase 3
+
+1. TA-031 PWA responsive bilingüe: acceso, perfil y selección de idioma.
+2. TA-032 creación de liga, invitaciones y administración de miembros.
+3. TA-033 competición y confirmación visible de `rules_snapshot`.
+4. TA-034 cartera, orden, historial, ranking y marca de incorporación tardía.
+5. TA-035 centro de notificaciones, exportación y borrado desde la PWA.
+6. TA-036 accesibilidad WCAG 2.2 AA y pruebas E2E de dos participantes.
+7. TA-037 staging reproducible: Vercel, Neon Frankfurt, Cloud Run Frankfurt,
    Secret Manager y GitHub OIDC; ramas Neon efímeras para integración en PR.
 
 ## Fases 4–7

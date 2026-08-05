@@ -151,6 +151,24 @@ Para cada día natural se calcula:
 
 ## Empezar
 
+### TradeArena nuevo: backend local o servidor Docker
+
+El backend FastAPI y PostgreSQL se pueden instalar desde un clon sin instalar
+Python ni PostgreSQL en el host:
+
+```bash
+cp .env.example .env
+# Sustituye POSTGRES_PASSWORD por: openssl rand -hex 32
+./scripts/install-compose.sh
+```
+
+La API queda en `http://127.0.0.1:8080`, Swagger en `/docs` y los datos se
+conservan en un volumen Docker. La guía canónica de instalación, actualización,
+seguridad, backup, restauración y despliegue OCI está en
+[`doc/instalacion-despliegue.md`](doc/instalacion-despliegue.md).
+
+### Ranking histórico
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate

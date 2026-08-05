@@ -57,7 +57,7 @@ def test_auth_service_exchanges_verified_identity_for_revocable_session():
     session = auth.finish_email(link, NOW)
     assert session == "session-1"
     assert sessions.authenticate(session) == "user-1"
-    assert "session-1" not in store.sessions
+    assert store.sessions.get("session-1") is None
 
 
 def test_verified_email_and_google_identities_link_to_one_account():
@@ -79,14 +79,16 @@ def test_verified_email_and_google_identities_link_to_one_account():
         NOW,
     )
     assert google_user.id == email_user.id
-    assert len(store.users) == 1
+    assert store.users.get_by_identity("email", "ana@example.com").id == email_user.id
+    assert store.users.get_by_identity("google", "g-1").id == email_user.id
 
 
 def test_application_session_expires_server_side():
     store = MemoryStore()
-    store.users["user-1"] = User(
-        "user-1", "ana@example.com", "email", "ana@example.com", NOW
-    )
+    with store.transaction() as uow:
+        uow.users.add(User(
+            "user-1", "ana@example.com", "email", "ana@example.com", NOW
+        ))
     current = [NOW]
     sessions = SessionService(store, lambda: "session-1", lambda: current[0])
     token = sessions.issue("user-1")

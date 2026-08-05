@@ -4,9 +4,9 @@
 
 TradeArena evoluciona como un monolito modular con el dominio financiero
 Python independiente. Las Fases 0–2 están terminadas: existen reglas v1,
-dominio reproducible, casos de uso de cuentas y ligas, API transportable,
-contrato OpenAPI y migración PostgreSQL inicial. El siguiente trabajo es
-TA-030: hacer ejecutables FastAPI y PostgreSQL.
+dominio reproducible, casos de uso de cuentas y ligas, API FastAPI,
+persistencia PostgreSQL, migraciones e imagen OCI verificadas. TA-030 está
+terminado y el siguiente trabajo es TA-031: acceso, perfil y PWA.
 
 ```text
 Next.js PWA/BFF — Vercel
@@ -28,6 +28,13 @@ Pages seguirán funcionando hasta la retirada deliberada de la Fase 7.
 - `web/`: Next.js, TypeScript, App Router, PWA responsive ES/EN y `pnpm`.
 - `tradearena/`: dominio, aplicación, puertos, adaptadores y presentación
   FastAPI. Las reglas financieras no se duplican en TypeScript.
+- El plan Free ofrece una liga activa, dos plazas y capital virtual inicial
+  fijo de 3.000 USD por competición.
+- El repositorio es la fuente canónica para instalar y operar TradeArena en
+  cualquier entorno soportado. Cada plataforma incorpora documentación,
+  configuración, infraestructura como código, migración, health checks,
+  backup, restauración y rollback versionados; no se aceptan pasos esenciales
+  que solo existan en una consola externa.
 - PostgreSQL 16 mediante `psycopg` 3. Los servicios síncronos se exponen con
   rutas síncronas de FastAPI para no introducir una reescritura asíncrona.
 - `Store` evolucionará a una unidad de trabajo con repositorios tipados.
@@ -86,6 +93,10 @@ contradictorias.
 **Salida:** API v1 ejecutable con persistencia real, autorización entre ligas,
 OpenAPI coherente y suite completa verde.
 
+La instalación genérica resultante se conserva en `Dockerfile`, `compose.yaml`,
+`.env.example`, `scripts/install-compose.sh`,
+`scripts/verify-deployment.sh` y `doc/instalacion-despliegue.md`.
+
 ### Fase 3.2 — PWA: acceso, perfil y ligas
 
 1. Crear Next.js/PWA con tokens de diseño, accesibilidad base,
@@ -122,6 +133,9 @@ deterministas y obtienen el mismo ranking reproducible.
 4. En producción, aplicar primero migraciones compatibles, desplegar API y
    promover después la PWA. Las migraciones destructivas usan expand/contract
    en cambios separados.
+5. Mantener en el repositorio runbooks ejecutables de instalación,
+   actualización, verificación, backup, restauración, rollback y retirada para
+   cada entorno soportado.
 
 **Salida:** staging reproducible y procedimiento probado de despliegue y
 rollback; producción continúa cerrada.
@@ -171,6 +185,8 @@ ejecuciones, apuntes o snapshots.
 - Repetir o interrumpir jobs no duplica ejecuciones, ledger ni snapshots.
 - Migraciones verificadas sobre esquema vacío y sobre la versión anterior.
 - Smoke tests de staging y restauración ensayada antes de beta.
+- Instalación reproducible desde un clon limpio en cada entorno soportado,
+  usando solo artefactos e instrucciones versionados en el repositorio.
 - En cada fase deben pasar `python3 -m pytest tests/ -q`, el ranking histórico
   offline y, cuando exista, la verificación completa de la PWA.
 - Todo cambio de rutas, contratos, despliegue, secretos, privacidad o reglas
@@ -201,16 +217,15 @@ Secuencia recomendada:
 7. Stripe y preparación de beta.
 
 Cada `/goal` debe expresar resultado, límites y verificación, y referenciar
-este documento en vez de copiar toda la especificación. Ejemplo para el
-siguiente bloque:
+este documento en vez de copiar toda la especificación. El siguiente objetivo
+es TA-031 y debe conservar los artefactos de instalación y ampliar la guía si
+introduce nuevos procesos, variables o dependencias operativas.
 
 ```text
-/goal Implementa TA-030 conforme a doc/plan-ejecucion-tradearena.md: unidad de
-trabajo y repositorios, adaptadores Memory/PostgreSQL equivalentes, migraciones
-incrementales, servidor FastAPI, sesión revocable, health checks, contenedor y
-pruebas de integración PostgreSQL. Conserva el dominio financiero independiente
-y la autorización 404 entre ligas. Termina con OpenAPI coherente, suite completa
-verde y documentación actualizada.
+/goal Implementa TA-031 conforme a doc/plan-ejecucion-tradearena.md: PWA
+responsive ES/EN, acceso Auth0 mediante BFF, perfil y sesión HttpOnly. Conserva
+la autorización 404 entre ligas y actualiza instalación, variables, OpenAPI,
+pruebas y documentación operativa en el mismo cambio.
 ```
 
 ## 6. Supuestos y puertas
@@ -225,3 +240,5 @@ verde y documentación actualizada.
 - Las reglas v1, precios comerciales y alcance España/UE permanecen como están
   en la especificación versionada.
 - El legado continúa operativo y separado hasta la Fase 7.
+- Un entorno no se considera soportado hasta que pueda instalarse, verificarse,
+  actualizarse y recuperarse con artefactos versionados del repositorio.

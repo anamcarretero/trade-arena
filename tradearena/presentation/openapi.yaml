@@ -2,12 +2,23 @@ openapi: 3.1.0
 info:
   title: TradeArena API
   version: 1.0.0
-servers:
-  - url: /api/v1
 security:
   - bearerSession: []
 paths:
-  /me:
+  /health/live:
+    get:
+      operationId: healthLive
+      security: []
+      responses:
+        "200": {description: Proceso ASGI operativo}
+  /health/ready:
+    get:
+      operationId: healthReady
+      security: []
+      responses:
+        "200": {description: Dependencias disponibles}
+        "503": {description: Alguna dependencia no está disponible}
+  /api/v1/me:
     get:
       operationId: exportOwnAccount
       responses:
@@ -18,7 +29,7 @@ paths:
       responses:
         "204": {description: Cuenta eliminada}
         "403": {$ref: "#/components/responses/Forbidden"}
-  /me/profile:
+  /api/v1/me/profile:
     patch:
       operationId: updateOwnProfile
       requestBody:
@@ -36,7 +47,7 @@ paths:
       responses:
         "200": {description: Perfil actualizado}
         "400": {description: Perfil o política de edad inválidos}
-  /leagues:
+  /api/v1/leagues:
     get:
       operationId: listOwnLeagues
       responses:
@@ -54,7 +65,7 @@ paths:
       responses:
         "201": {description: Liga creada}
         "409": {description: Límite del plan alcanzado}
-  /leagues/{leagueId}:
+  /api/v1/leagues/{league_id}:
     get:
       operationId: getLeague
       parameters:
@@ -62,7 +73,7 @@ paths:
       responses:
         "200": {description: Liga autorizada}
         "404": {description: No existe o la sesión no pertenece a ella}
-  /leagues/{leagueId}/invitations:
+  /api/v1/leagues/{league_id}/invitations:
     post:
       operationId: inviteLeagueMember
       parameters:
@@ -71,35 +82,35 @@ paths:
         "201": {description: Invitación creada}
         "404": {description: Liga no accesible}
         "409": {description: Límite del plan alcanzado}
-  /leagues/{leagueId}/invitations/{invitationId}:
+  /api/v1/leagues/{league_id}/invitations/{invitation_id}:
     delete:
       operationId: revokeLeagueInvitation
       parameters:
         - {$ref: "#/components/parameters/LeagueId"}
-        - name: invitationId
+        - name: invitation_id
           in: path
           required: true
           schema: {type: string}
       responses:
         "204": {description: Invitación revocada}
         "404": {description: Liga o invitación no accesible}
-  /invitations/{invitationId}:
+  /api/v1/invitations/{invitation_id}:
     post:
       operationId: acceptInvitation
       parameters:
-        - name: invitationId
+        - name: invitation_id
           in: path
           required: true
           schema: {type: string}
       responses:
         "200": {description: Membresía creada}
         "403": {description: La invitación corresponde a otro email}
-  /leagues/{leagueId}/members/{userId}:
+  /api/v1/leagues/{league_id}/members/{user_id}:
     delete:
       operationId: removeLeagueMember
       parameters:
         - {$ref: "#/components/parameters/LeagueId"}
-        - name: userId
+        - name: user_id
           in: path
           required: true
           schema: {type: string}
@@ -113,7 +124,7 @@ components:
       scheme: bearer
   parameters:
     LeagueId:
-      name: leagueId
+      name: league_id
       in: path
       required: true
       schema: {type: string}

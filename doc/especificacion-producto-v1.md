@@ -52,7 +52,8 @@ una simulación educativa sin dinero, premios, retiradas ni conexión a bróker.
 - Al empezar, calendario y reglas se copian a `rules_snapshot`. Una entrada
   tardía recibe el capital inicial completo y queda marcada en el ranking.
 - Free permite una liga activa del creador y dos plazas, contando propietario,
-  miembros e invitaciones pendientes. Las comprobaciones son transaccionales.
+  miembros e invitaciones pendientes. Cada competición Free usa un capital
+  virtual inicial fijo de 3.000 USD. Las comprobaciones son transaccionales.
 - Friends y Club mantienen los límites y política de degradación definidos en
   el plan de ejecución; se activarán en la Fase 5.
 - La fecha de nacimiento se valida en servidor y solo mayores de 18 años pueden

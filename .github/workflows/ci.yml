@@ -13,6 +13,22 @@ concurrency:
 jobs:
   python:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tradearena
+          POSTGRES_PASSWORD: tradearena
+          POSTGRES_DB: tradearena_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tradearena -d tradearena_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://tradearena:tradearena@127.0.0.1:5432/tradearena_test
     steps:
       - uses: actions/checkout@v4
 
@@ -26,6 +42,15 @@ jobs:
 
       - name: Ejecutar pruebas
         run: python -m pytest tests/ -q
+
+      - name: Validar instalación reproducible
+        shell: bash
+        run: |
+          cp .env.example .env
+          sed -i 's/replace-with-a-long-url-safe-secret/ci-only-not-a-real-secret/' .env
+          trap 'docker compose down --volumes' EXIT
+          bash -n scripts/install-compose.sh scripts/verify-deployment.sh
+          ./scripts/install-compose.sh
 
       - name: Validar ranking histórico offline
         shell: bash
