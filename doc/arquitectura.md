@@ -91,18 +91,49 @@ flowchart LR
   Auth0 ni proveedores de precios.
 - `application/` concentra cuentas, sesiones, ligas, roles, invitaciones,
   límites de plan y autorización. Una liga ajena se responde como inexistente.
-- `ports/` define contratos de identidad, persistencia y futuros adaptadores.
-- `adapters/` incluye identidad local firmada y almacenamiento transaccional en
-  memoria para pruebas; PostgreSQL se define en `migrations/001_initial.sql`.
-- `presentation/` publica el dispatcher REST `/api/v1` y su contrato
-  `openapi.yaml`. El servidor ASGI y el repositorio PostgreSQL ejecutable son el
-  primer trabajo de Fase 3.
+- `ports/` define contratos de identidad y repositorios tipados dentro de una
+  unidad de trabajo. Los servicios no conocen diccionarios ni SQL.
+- `adapters/` incluye identidad local firmada, almacenamiento transaccional en
+  memoria y `PostgresStore` síncrono con psycopg 3. Ambos adaptadores exponen el
+  mismo contrato. PostgreSQL se inicializa con `migrations/001_initial.sql`.
+- `presentation/` publica el dispatcher REST `/api/v1`, su contrato
+  `openapi.yaml` y el primer adaptador ASGI FastAPI de TA-030. El adaptador
+  conserva el dispatcher como frontera de aplicación, valida cuerpos tipados,
+  expone `/health/live` y `/health/ready`, y verifica rutas y `operationId`
+  contra el contrato. `presentation/server.py` compone la API con PostgreSQL y
+  exige `DATABASE_URL`; no cae silenciosamente a memoria en producción.
 
 La migración inicial cubre usuarios, identidad, sesiones, auditoría, ligas,
 miembros, invitaciones, competiciones, carteras, órdenes, ejecuciones, ledger,
 mercado, snapshots, facturación y notificaciones. Los límites Free se vuelven a
 validar dentro de la transacción de aplicación; los índices SQL son una segunda
 defensa, no el único control.
+
+`python3 -m tradearena migrate` aplica por orden las migraciones SQL pendientes
+y registra cada versión. La API se inicia con `python3 -m tradearena serve`;
+ambos comandos usan `DATABASE_URL` pero
+tienen ciclos de vida separados. El `Dockerfile` ejecuta la API como usuario
+sin privilegios y permite usar la misma imagen para migrar sobrescribiendo el
+comando.
+
+Al crear una liga Free se bloquea la fila del propietario antes de comprobar
+su límite, y el índice parcial mantiene una segunda defensa. Al invitar o
+aceptar se bloquea la liga antes de contar miembros e invitaciones pendientes,
+de modo que dos solicitudes concurrentes no pueden consumir la misma plaza.
+
+### Portabilidad operativa
+
+`Dockerfile` es el artefacto OCI común. `compose.yaml` proporciona la referencia
+ejecutable para una máquina local o servidor Docker: PostgreSQL privado con
+volumen persistente, migración finita y API sin privilegios. `.env.example`
+enumera configuración sin secretos, `scripts/install-compose.sh` instala o
+actualiza y `scripts/verify-deployment.sh` ejecuta los smoke tests.
+
+`doc/instalacion-despliegue.md` es el runbook canónico. Todo entorno futuro
+debe versionar infraestructura, secretos requeridos sin valores, despliegue,
+migraciones, health checks, backup/restauración y rollback. Una configuración
+que solo exista en la consola de un proveedor no forma parte de la arquitectura
+soportada.
 
 ### Despliegue objetivo de TradeArena
 
@@ -118,8 +149,8 @@ flowchart LR
 
 - Vercel sirve la PWA, crea previews por rama y conserva la sesión en el BFF;
   el navegador no se conecta a PostgreSQL ni recibe el token interno de API.
-- FastAPI se desplegará en un Cloud Run Service con escala a cero cuando
-  TA-030 proporcione un servidor ASGI y un adaptador PostgreSQL ejecutables.
+- FastAPI se desplegará en un Cloud Run Service con escala a cero usando el
+  servidor ASGI, el adaptador PostgreSQL y la imagen OCI de TA-030.
 - Neon `aws-eu-central-1` es la fuente de verdad. Los PR que cambien backend o
   migraciones usarán una rama efímera solo para integración en CI; las previews
   de interfaz no acceden directamente a esa rama.
@@ -174,7 +205,7 @@ ranking, `rebase_from` reinicia esta composición en `COMPETITION_START`.
 
 | Workflow | Disparador | Responsabilidad |
 |---|---|---|
-| `.github/workflows/ci.yml` | cada pull request | instala las dependencias fijadas, ejecuta toda la suite Python y reproduce el ranking histórico offline con datos ficticios y salidas temporales |
+| `.github/workflows/ci.yml` | cada pull request | instala dependencias, prueba PostgreSQL 16 y migraciones, construye y verifica la instalación Compose desde cero, ejecuta toda la suite Python y reproduce el ranking histórico offline con datos ficticios |
 | `.github/workflows/inbox.yml` | `repository_dispatch`, cron cada ~15 min o manual | lee IMAP, autentica, cifra extractos, recalcula y publica si hubo cambios |
 | `.github/workflows/ranking.yml` | horario de mercado, cierre, cambios en `players/` o `trader/`, dispatch o manual | ejecuta tests, actualiza precios/analistas, genera artefactos y abre/cierra aviso de extractos no descifrables |
 | `.github/workflows/guard.yml` | push a `main` | para la vía de token, revierte cambios fuera de la carpeta del jugador asignado en `PLAYER_OWNERS` |
@@ -184,9 +215,9 @@ Los workflows de ingesta y ranking usan grupos de concurrencia y reintentos de
 La carpeta `docs/` es la raíz configurada para GitHub Pages; no confundirla con
 `doc/`, que contiene documentación de mantenimiento.
 
-El CI de pull request no usa secretos, red ni datos reales. Es una puerta de
-línea base para todo el repositorio; TA-030 la ampliará con contrato OpenAPI y
-PostgreSQL aislado sin sustituir estas comprobaciones deterministas.
+El CI de pull request no usa secretos, red externa ni datos reales. Es una
+puerta de línea base para todo el repositorio; TA-030 añade el contrato OpenAPI
+y PostgreSQL 16 aislado sin sustituir las comprobaciones deterministas.
 
 La automatización anterior pertenece al legado. TradeArena añadirá CI de
 backend/PWA, ramas Neon efímeras para integración y despliegue de staging tras

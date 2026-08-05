@@ -10,3 +10,8 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+
+# Configuración local y copias operativas: nunca versionar secretos ni dumps.
+.env
+!.env.example
+backups/

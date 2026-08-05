@@ -1,0 +1,14 @@
+.git
+.github
+.pytest_cache
+.venv
+__pycache__
+data
+doc
+docs
+examples
+players
+tests
+trader
+*.csv
+*.enc

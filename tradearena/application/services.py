@@ -12,6 +12,7 @@ from .models import (
     Invitation, InvitationStatus, League, Membership, Profile, Role, User,
 )
 from tradearena.ports.identity import IdentityAssertion
+from tradearena.ports.store import StoreConflict
 
 
 class ApplicationError(Exception):
@@ -52,19 +53,22 @@ class SessionService:
     def issue(self, user_id: str, now: datetime | None = None) -> str:
         token = self._token_factory()
         issued_at = now or self._clock()
-        with self.store.transaction():
-            self.store.sessions[self._hash(token)] = (user_id, issued_at + self.TTL)
+        with self.store.transaction() as uow:
+            uow.sessions.add(
+                self._hash(token), user_id, issued_at, issued_at + self.TTL
+            )
         return token
 
     def authenticate(self, token: str | None) -> str:
-        session = self.store.sessions.get(self._hash(token or ""))
-        if not session or self._clock() >= session[1]:
-            raise Forbidden("sesión inválida")
-        user_id = session[0]
-        user = self.store.users.get(user_id or "")
-        if not user_id or not user or user.deleted_at is not None:
-            raise Forbidden("sesión inválida")
-        return user_id
+        with self.store.transaction() as uow:
+            session = uow.sessions.get(self._hash(token or ""))
+            if not session or self._clock() >= session[1]:
+                raise Forbidden("sesión inválida")
+            user_id = session[0]
+            user = uow.users.get(user_id or "")
+            if not user_id or not user or user.deleted_at is not None:
+                raise Forbidden("sesión inválida")
+            return user_id
 
     @staticmethod
     def _hash(token: str) -> str:
@@ -102,16 +106,18 @@ class AccountService:
         if not assertion.email_verified:
             raise Forbidden("el email debe estar verificado")
         identity = (assertion.provider, assertion.subject)
-        with self.store.transaction():
-            existing_id = self.store.users_by_identity.get(identity)
-            if existing_id:
-                return self._active_user(existing_id)
+        with self.store.transaction() as uow:
+            existing = uow.users.get_by_identity(*identity)
+            if existing:
+                return self._active_user(uow, existing.id)
             email = assertion.email.lower()
-            same_email_id = self.store.users_by_email.get(email)
-            if same_email_id:
-                user = self._active_user(same_email_id)
-                self.store.users_by_identity[identity] = user.id
-                self.store.record_audit(
+            same_email = uow.users.get_by_email(email)
+            if same_email:
+                user = self._active_user(uow, same_email.id)
+                uow.users.link_identity(
+                    assertion.provider, assertion.subject, user.id, True
+                )
+                uow.audit.add(
                     now, user.id, "identity.linked", "user", user.id,
                     {"provider": assertion.provider},
                 )
@@ -120,10 +126,11 @@ class AccountService:
                 self._id(), email, assertion.provider,
                 assertion.subject, now,
             )
-            self.store.users[user.id] = user
-            self.store.users_by_identity[identity] = user.id
-            self.store.users_by_email[email] = user.id
-            self.store.record_audit(now, user.id, "account.created", "user", user.id)
+            uow.users.add(user)
+            uow.users.link_identity(
+                assertion.provider, assertion.subject, user.id, True
+            )
+            uow.audit.add(now, user.id, "account.created", "user", user.id)
             return user
 
     def set_profile(
@@ -141,53 +148,48 @@ class AccountService:
                           accepted_terms_at, birth_date)
         if not profile.display_name:
             raise InvalidInput("el nombre visible es obligatorio")
-        with self.store.transaction():
-            self._active_user(user_id)
-            self.store.profiles[user_id] = profile
-            self.store.record_audit(now, user_id, "profile.updated", "user", user_id)
+        with self.store.transaction() as uow:
+            self._active_user(uow, user_id)
+            uow.profiles.save(profile)
+            uow.audit.add(now, user_id, "profile.updated", "user", user_id)
         return profile
 
     def export(self, actor_id: str, user_id: str) -> dict:
         if actor_id != user_id:
             raise Forbidden("solo se pueden exportar los datos propios")
-        user = self._active_user(user_id)
-        profile = self.store.profiles.get(user_id)
-        memberships = [asdict(item) for item in self.store.memberships.values()
-                       if item.user_id == user_id]
-        invitations = [asdict(item) for item in self.store.invitations.values()
-                       if item.email == user.email]
-        return {
-            "user": asdict(user),
-            "profile": asdict(profile) if profile else None,
-            "memberships": memberships,
-            "invitations": invitations,
-        }
+        with self.store.transaction() as uow:
+            user = self._active_user(uow, user_id)
+            profile = uow.profiles.get(user_id)
+            memberships = [
+                asdict(item) for item in uow.memberships.list_for_user(user_id)
+            ]
+            invitations = [
+                asdict(item) for item in uow.invitations.list_for_email(user.email)
+            ]
+            return {
+                "user": asdict(user),
+                "profile": asdict(profile) if profile else None,
+                "memberships": memberships,
+                "invitations": invitations,
+            }
 
     def delete(self, actor_id: str, user_id: str, now: datetime) -> None:
         if actor_id != user_id:
             raise Forbidden("solo se puede borrar la cuenta propia")
-        with self.store.transaction():
-            user = self._active_user(user_id)
-            old_email = user.email
+        with self.store.transaction() as uow:
+            user = self._active_user(uow, user_id)
             user.deleted_at = now
             user.email = f"deleted+{user.id}@invalid.local"
-            self.store.users_by_email.pop(old_email, None)
-            self.store.users_by_identity = {
-                identity: uid for identity, uid in self.store.users_by_identity.items()
-                if uid != user_id
-            }
-            self.store.profiles.pop(user_id, None)
-            for membership in self.store.memberships.values():
-                if membership.user_id == user_id and membership.removed_at is None:
-                    membership.removed_at = now
-            self.store.sessions = {
-                token: session for token, session in self.store.sessions.items()
-                if session[0] != user_id
-            }
-            self.store.record_audit(now, user_id, "account.deleted", "user", user_id)
+            uow.users.save(user)
+            uow.users.delete_identities(user_id)
+            uow.profiles.delete(user_id)
+            uow.memberships.remove_active_for_user(user_id, now)
+            uow.sessions.revoke_for_user(user_id, now)
+            uow.audit.add(now, user_id, "account.deleted", "user", user_id)
 
-    def _active_user(self, user_id: str) -> User:
-        user = self.store.users.get(user_id)
+    @staticmethod
+    def _active_user(uow, user_id: str) -> User:
+        user = uow.users.get(user_id)
         if not user or user.deleted_at is not None:
             raise NotFound("cuenta no encontrada")
         return user
@@ -202,105 +204,111 @@ class LeagueService:
         self._id = id_factory
 
     def create(self, actor_id: str, name: str, now: datetime) -> League:
-        with self.store.transaction():
-            user = self.store.users.get(actor_id)
-            if not user or user.deleted_at is not None:
-                raise Forbidden("cuenta no activa")
-            active_owned = sum(
-                1 for league in self.store.leagues.values()
-                if league.owner_id == actor_id and league.active and league.plan == "free"
-            )
-            if active_owned >= self.FREE_MAX_ACTIVE_LEAGUES:
-                raise PlanLimitExceeded("Free permite una liga activa")
-            league = League(self._id(), name.strip(), actor_id, now)
-            if not league.name:
-                raise InvalidInput("el nombre de liga es obligatorio")
-            self.store.leagues[league.id] = league
-            self.store.memberships[(league.id, actor_id)] = Membership(
-                league.id, actor_id, Role.OWNER, now
-            )
-            self.store.record_audit(now, actor_id, "league.created", "league", league.id)
-            return league
+        try:
+            with self.store.transaction() as uow:
+                user = uow.users.get(actor_id, for_update=True)
+                if not user or user.deleted_at is not None:
+                    raise Forbidden("cuenta no activa")
+                if uow.leagues.count_active_free_owned(actor_id) \
+                        >= self.FREE_MAX_ACTIVE_LEAGUES:
+                    raise PlanLimitExceeded("Free permite una liga activa")
+                league = League(self._id(), name.strip(), actor_id, now)
+                if not league.name:
+                    raise InvalidInput("el nombre de liga es obligatorio")
+                uow.leagues.add(league)
+                uow.memberships.save(Membership(
+                    league.id, actor_id, Role.OWNER, now
+                ))
+                uow.audit.add(
+                    now, actor_id, "league.created", "league", league.id
+                )
+                return league
+        except StoreConflict as exc:
+            if exc.constraint == "one_active_free_league_per_owner":
+                raise PlanLimitExceeded("Free permite una liga activa") from exc
+            raise Conflict("escritura duplicada") from exc
 
     def get(self, actor_id: str, league_id: str) -> League:
-        self._membership(actor_id, league_id)
-        league = self.store.leagues.get(league_id)
-        if not league:
-            raise NotFound("liga no encontrada")
-        return league
+        with self.store.transaction() as uow:
+            self._membership(uow, actor_id, league_id)
+            league = uow.leagues.get(league_id)
+            if not league:
+                raise NotFound("liga no encontrada")
+            return league
 
     def list_for(self, actor_id: str) -> list[League]:
-        allowed = {
-            league_id for (league_id, user_id), member in self.store.memberships.items()
-            if user_id == actor_id and member.removed_at is None
-        }
-        return [league for league in self.store.leagues.values() if league.id in allowed]
+        with self.store.transaction() as uow:
+            return uow.leagues.list_for_user(actor_id)
 
     def invite(
         self, actor_id: str, league_id: str, email: str,
         expires_at: datetime, now: datetime,
     ) -> Invitation:
-        with self.store.transaction():
+        with self.store.transaction() as uow:
             if expires_at <= now:
                 raise InvalidInput("la invitación debe caducar en el futuro")
-            actor = self._membership(actor_id, league_id)
+            actor = self._membership(uow, actor_id, league_id)
             if actor.role not in {Role.OWNER, Role.ADMIN}:
                 raise Forbidden("el rol no permite invitar")
-            league = self.store.leagues[league_id]
-            occupied = self._occupied_slots(league_id, now)
+            league = uow.leagues.get(league_id, for_update=True)
+            if not league:
+                raise NotFound("liga no encontrada")
+            occupied = self._occupied_slots(uow, league_id, now)
             if league.plan == "free" and occupied >= self.FREE_MAX_MEMBERS:
                 raise PlanLimitExceeded("Free permite dos miembros, incluidas invitaciones")
             invitation = Invitation(
                 self._id(), league_id, email.strip().lower(), Role.MEMBER,
                 actor_id, now, expires_at,
             )
-            self.store.invitations[invitation.id] = invitation
-            self.store.record_audit(
+            uow.invitations.save(invitation)
+            uow.audit.add(
                 now, actor_id, "invitation.created", "invitation", invitation.id,
                 {"league_id": league_id},
             )
             return invitation
 
     def revoke(self, actor_id: str, league_id: str, invitation_id: str, now: datetime) -> None:
-        with self.store.transaction():
-            actor = self._membership(actor_id, league_id)
+        with self.store.transaction() as uow:
+            actor = self._membership(uow, actor_id, league_id)
             if actor.role not in {Role.OWNER, Role.ADMIN}:
                 raise Forbidden("el rol no permite revocar")
-            invitation = self.store.invitations.get(invitation_id)
+            invitation = uow.invitations.get(invitation_id)
             if not invitation or invitation.league_id != league_id:
                 raise NotFound("invitación no encontrada")
             if invitation.status is not InvitationStatus.PENDING:
                 raise Conflict("la invitación ya no está pendiente")
             invitation.status = InvitationStatus.REVOKED
-            self.store.record_audit(
+            uow.invitations.save(invitation)
+            uow.audit.add(
                 now, actor_id, "invitation.revoked", "invitation", invitation.id
             )
 
     def accept(self, actor_id: str, invitation_id: str, now: datetime) -> Membership:
-        with self.store.transaction():
-            invitation = self.store.invitations.get(invitation_id)
+        with self.store.transaction() as uow:
+            invitation = uow.invitations.get(invitation_id)
             if not invitation:
                 raise NotFound("invitación no encontrada")
             if invitation.status is not InvitationStatus.PENDING:
                 raise Conflict("la invitación ya no está pendiente")
             if now >= invitation.expires_at:
                 invitation.status = InvitationStatus.EXPIRED
+                uow.invitations.save(invitation)
                 raise Conflict("la invitación ha caducado")
-            user = self.store.users.get(actor_id)
+            user = uow.users.get(actor_id)
             if not user or user.email.lower() != invitation.email:
                 raise Forbidden("la invitación pertenece a otro email")
-            league = self.store.leagues[invitation.league_id]
-            active_members = sum(
-                1 for member in self.store.memberships.values()
-                if member.league_id == league.id and member.removed_at is None
-            )
+            league = uow.leagues.get(invitation.league_id, for_update=True)
+            if not league:
+                raise NotFound("liga no encontrada")
+            active_members = uow.memberships.count_active(league.id)
             if league.plan == "free" and active_members >= self.FREE_MAX_MEMBERS:
                 raise PlanLimitExceeded("la liga Free ya está completa")
             membership = Membership(league.id, actor_id, invitation.role, now)
-            self.store.memberships[(league.id, actor_id)] = membership
+            uow.memberships.save(membership)
             invitation.status = InvitationStatus.ACCEPTED
             invitation.accepted_by = actor_id
-            self.store.record_audit(
+            uow.invitations.save(invitation)
+            uow.audit.add(
                 now, actor_id, "invitation.accepted", "league", league.id
             )
             return membership
@@ -308,35 +316,31 @@ class LeagueService:
     def remove_member(
         self, actor_id: str, league_id: str, user_id: str, now: datetime
     ) -> None:
-        with self.store.transaction():
-            actor = self._membership(actor_id, league_id)
+        with self.store.transaction() as uow:
+            actor = self._membership(uow, actor_id, league_id)
             if actor.role not in {Role.OWNER, Role.ADMIN}:
                 raise Forbidden("el rol no permite expulsar")
-            target = self._membership(user_id, league_id)
+            target = self._membership(uow, user_id, league_id)
             if target.role is Role.OWNER:
                 raise Conflict("no se puede expulsar al propietario")
             target.removed_at = now
-            self.store.record_audit(
+            uow.memberships.save(target)
+            uow.audit.add(
                 now, actor_id, "member.removed", "league", league_id,
                 {"user_id": user_id},
             )
 
-    def _membership(self, user_id: str, league_id: str) -> Membership:
-        membership = self.store.memberships.get((league_id, user_id))
+    @staticmethod
+    def _membership(uow, user_id: str, league_id: str) -> Membership:
+        membership = uow.memberships.get(league_id, user_id)
         if not membership or membership.removed_at is not None:
             # No revela si la liga existe: evita enumeración entre ligas.
             raise NotFound("liga no encontrada")
         return membership
 
-    def _occupied_slots(self, league_id: str, now: datetime) -> int:
-        members = sum(
-            1 for item in self.store.memberships.values()
-            if item.league_id == league_id and item.removed_at is None
+    @staticmethod
+    def _occupied_slots(uow, league_id: str, now: datetime) -> int:
+        return (
+            uow.memberships.count_active(league_id)
+            + uow.invitations.count_pending(league_id, now)
         )
-        pending = sum(
-            1 for item in self.store.invitations.values()
-            if item.league_id == league_id
-            and item.status is InvitationStatus.PENDING
-            and item.expires_at > now
-        )
-        return members + pending

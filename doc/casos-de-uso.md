@@ -21,9 +21,10 @@ membresía activa.
 2. La persona mayor de edad completa nombre, idioma y consentimiento. Puede
    exportar sus propios datos o borrar la cuenta; el borrado revoca sesiones y
    anonimiza sin destruir la auditoría financiera.
-3. Free permite crear una liga activa. El creador es propietario y puede
-   invitar un segundo miembro. La invitación ocupa plaza, está ligada al email,
-   caduca y puede revocarse.
+3. Free permite crear una liga activa con capital virtual inicial fijo de
+   3.000 USD por competición. El creador es propietario y puede invitar un
+   segundo miembro. La invitación ocupa plaza, está ligada al email, caduca y
+   puede revocarse.
 4. Solo propietario/administrador invita o expulsa. La persona expulsada deja
    de tener acceso; su historial se conserva para auditoría.
 5. Cada acceso directo como `GET /api/v1/leagues/{id}` vuelve a comprobar la
@@ -31,15 +32,26 @@ membresía activa.
    para evitar enumerar ligas privadas.
 
 La PWA todavía no forma parte de estas fases. El contrato HTTP está en
-`tradearena/presentation/openapi.yaml` y sus pruebas de abuso directo en
+`tradearena/presentation/openapi.yaml`; TA-030 lo sirve mediante FastAPI,
+incluye sondas `/health/live` y `/health/ready`, y comprueba automáticamente
+que rutas y `operationId` coincidan. Las pruebas de abuso directo siguen en
 `tests/tradearena/test_authorization.py`.
+
+Para ejecutar el backend contra PostgreSQL se aplican primero las migraciones
+con `DATABASE_URL=... python3 -m tradearena migrate` y se arranca después la API
+con `python3 -m tradearena serve`. Liveness solo
+comprueba el proceso; readiness ejecuta una consulta contra PostgreSQL y
+responde `503` si no está disponible. Las pruebas de integración usan
+exclusivamente `TEST_DATABASE_URL`, crean un esquema aislado y comprobable, y
+lo eliminan al terminar.
 
 ### Flujo de desarrollo y preview de Fase 3
 
 1. Cada pull request instala Python 3.12 y las versiones exactas de
-   `requirements.txt`, ejecuta toda la suite Python y genera el ranking
-   histórico offline con datos ficticios en salidas temporales. No requiere red,
-   extractos reales ni secretos.
+   `requirements.txt`, levanta PostgreSQL 16 aislado, aplica las migraciones,
+   ejecuta toda la suite Python, construye y verifica la instalación Compose
+   desde cero, y genera el ranking histórico offline con datos ficticios en
+   salidas temporales. No requiere extractos reales ni secretos.
 2. La consolidación inicial se fusiona desde `codex/baseline-tradearena`; el
    trabajo TA-030 comienza después desde el `main` actualizado en otra rama.
 3. Un PR de interfaz obtiene una preview Vercel que consume fixtures o el API
@@ -53,6 +65,26 @@ La PWA todavía no forma parte de estas fases. El contrato HTTP está en
 6. Producción sigue bloqueada hasta superar revisión legal, licencia de mercado,
    DPA, restauración y seguridad. El ranking histórico continúa en GitHub Pages
    durante toda esta transición.
+
+### Instalar o actualizar TradeArena
+
+1. El operador parte de un clon y copia `.env.example` a `.env`, sin versionar
+   secretos.
+2. `scripts/install-compose.sh` valida Docker y Compose, construye la imagen y
+   espera a PostgreSQL 16.
+3. El servicio finito `migrate` aplica las migraciones pendientes. Si falla, la
+   API nueva no arranca.
+4. La API se ejecuta sin privilegios, PostgreSQL permanece en una red privada y
+   el volumen conserva los datos entre reinicios.
+5. `scripts/verify-deployment.sh` exige respuestas correctas de liveness,
+   readiness y OpenAPI antes de considerar terminada la instalación.
+6. En otro servidor o proveedor se usa la misma imagen y la secuencia
+   migrar→servir→verificar. Sus diferencias, secretos, IaC, backup,
+   restauración y rollback deben añadirse al repositorio antes de declararlo
+   soportado.
+
+El procedimiento completo y los comandos de diagnóstico viven en
+`doc/instalacion-despliegue.md`.
 
 ## 1. Alta de un jugador y carga por email
 
