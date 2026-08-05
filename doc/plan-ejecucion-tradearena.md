@@ -63,9 +63,12 @@ Pages seguirán funcionando hasta la retirada deliberada de la Fase 7.
 3. Fijar Python y todas las dependencias; hacer reproducibles local y CI.
 4. Mantener intactos `trader/`, los extractos cifrados y los artefactos
    generados.
+5. Ejecutar en cada pull request un CI mínimo sin secretos ni red: suite Python
+   completa y ranking histórico offline con datos ficticios.
 
 **Salida:** pruebas Python y ranking histórico offline ejecutables desde un
-entorno limpio, sin decisiones documentales contradictorias.
+entorno limpio tanto localmente como en PR, sin decisiones documentales
+contradictorias.
 
 ### Fase 3.1 — TA-030: PostgreSQL y FastAPI reales
 
@@ -181,6 +184,11 @@ producto. Cada objetivo se ejecuta en una rama `codex/<objetivo>` o worktree
 independiente, termina con pruebas y documentación, y se fusiona antes de
 abrir el siguiente. Dos objetivos no deben editar simultáneamente los mismos
 archivos.
+
+La consolidación y línea base se entrega primero mediante una rama con nombre
+estable, `codex/baseline-tradearena`, y un PR hacia `main`. TA-030 comienza
+después del merge, desde el `main` actualizado y en una rama nueva; no se
+acumula sobre una rama de salvaguarda o de trabajo previo.
 
 Secuencia recomendada:
 

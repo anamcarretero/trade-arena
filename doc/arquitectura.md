@@ -174,6 +174,7 @@ ranking, `rebase_from` reinicia esta composición en `COMPETITION_START`.
 
 | Workflow | Disparador | Responsabilidad |
 |---|---|---|
+| `.github/workflows/ci.yml` | cada pull request | instala las dependencias fijadas, ejecuta toda la suite Python y reproduce el ranking histórico offline con datos ficticios y salidas temporales |
 | `.github/workflows/inbox.yml` | `repository_dispatch`, cron cada ~15 min o manual | lee IMAP, autentica, cifra extractos, recalcula y publica si hubo cambios |
 | `.github/workflows/ranking.yml` | horario de mercado, cierre, cambios en `players/` o `trader/`, dispatch o manual | ejecuta tests, actualiza precios/analistas, genera artefactos y abre/cierra aviso de extractos no descifrables |
 | `.github/workflows/guard.yml` | push a `main` | para la vía de token, revierte cambios fuera de la carpeta del jugador asignado en `PLAYER_OWNERS` |
@@ -182,6 +183,10 @@ Los workflows de ingesta y ranking usan grupos de concurrencia y reintentos de
 `rebase` al publicar, porque ambos pueden regenerar `docs/` y `data/` a la vez.
 La carpeta `docs/` es la raíz configurada para GitHub Pages; no confundirla con
 `doc/`, que contiene documentación de mantenimiento.
+
+El CI de pull request no usa secretos, red ni datos reales. Es una puerta de
+línea base para todo el repositorio; TA-030 la ampliará con contrato OpenAPI y
+PostgreSQL aislado sin sustituir estas comprobaciones deterministas.
 
 La automatización anterior pertenece al legado. TradeArena añadirá CI de
 backend/PWA, ramas Neon efímeras para integración y despliegue de staging tras

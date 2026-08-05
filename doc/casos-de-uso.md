@@ -36,17 +36,21 @@ La PWA todavía no forma parte de estas fases. El contrato HTTP está en
 
 ### Flujo de desarrollo y preview de Fase 3
 
-1. Cada cambio se valida con Python 3.12 y las versiones exactas de
-   `requirements.txt`.
-2. Un PR de interfaz obtiene una preview Vercel que consume fixtures o el API
+1. Cada pull request instala Python 3.12 y las versiones exactas de
+   `requirements.txt`, ejecuta toda la suite Python y genera el ranking
+   histórico offline con datos ficticios en salidas temporales. No requiere red,
+   extractos reales ni secretos.
+2. La consolidación inicial se fusiona desde `codex/baseline-tradearena`; el
+   trabajo TA-030 comienza después desde el `main` actualizado en otra rama.
+3. Un PR de interfaz obtiene una preview Vercel que consume fixtures o el API
    integrado de staging mediante el BFF; nunca abre una conexión del navegador
    a PostgreSQL.
-3. Si el PR cambia backend, persistencia o migraciones, CI crea una rama Neon
+4. Si el PR cambia backend, persistencia o migraciones, CI crea una rama Neon
    efímera, aplica todas las migraciones, ejecuta las pruebas de integración y
    elimina la rama al cerrar el PR.
-4. No se crea una API Cloud Run por PR. Tras fusionar en `main`, se despliega
+5. No se crea una API Cloud Run por PR. Tras fusionar en `main`, se despliega
    staging, se ejecutan smoke tests y solo entonces el cambio puede promoverse.
-5. Producción sigue bloqueada hasta superar revisión legal, licencia de mercado,
+6. Producción sigue bloqueada hasta superar revisión legal, licencia de mercado,
    DPA, restauración y seguridad. El ranking histórico continúa en GitHub Pages
    durante toda esta transición.
 
