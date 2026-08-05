@@ -121,6 +121,20 @@ def test_holdings_value_empty():
     assert holdings_value([], PRICES) == {}
 
 
+def test_holdings_value_offline_uses_latest_cached_day(tmp_path):
+    cache = tmp_path / "prices"
+    cache.mkdir()
+    (cache / "AAPL.csv").write_text(
+        "date,close\n2020-01-02,100.0\n", encoding="utf-8"
+    )
+    prices = PriceCache(str(cache), offline=True)
+    events = [revolut.Event(
+        day=date(2020, 1, 2), ticker="AAPL", kind=revolut.BUY,
+        quantity=1.0, total=100.0, currency="USD",
+    )]
+    assert holdings_value(events, prices) == {"AAPL": 100.0}
+
+
 def test_daily_contributions_sum_to_pnl():
     events, _ = revolut.parse_file(os.path.join(DATA, "sample.csv"))
     series = compute_daily_series(events, PRICES, until=date(2026, 7, 4))

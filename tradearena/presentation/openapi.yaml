@@ -1,0 +1,122 @@
+openapi: 3.1.0
+info:
+  title: TradeArena API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+security:
+  - bearerSession: []
+paths:
+  /me:
+    get:
+      operationId: exportOwnAccount
+      responses:
+        "200": {description: Datos propios exportables}
+        "403": {$ref: "#/components/responses/Forbidden"}
+    delete:
+      operationId: deleteOwnAccount
+      responses:
+        "204": {description: Cuenta eliminada}
+        "403": {$ref: "#/components/responses/Forbidden"}
+  /me/profile:
+    patch:
+      operationId: updateOwnProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [display_name, locale, birth_date, accepted_terms_at]
+              properties:
+                display_name: {type: string, minLength: 1}
+                locale: {type: string, enum: [es, en]}
+                birth_date: {type: string, format: date}
+                accepted_terms_at: {type: string, format: date-time}
+      responses:
+        "200": {description: Perfil actualizado}
+        "400": {description: Perfil o política de edad inválidos}
+  /leagues:
+    get:
+      operationId: listOwnLeagues
+      responses:
+        "200": {description: Ligas de las que forma parte la sesión}
+    post:
+      operationId: createLeague
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties: {name: {type: string, minLength: 1}}
+      responses:
+        "201": {description: Liga creada}
+        "409": {description: Límite del plan alcanzado}
+  /leagues/{leagueId}:
+    get:
+      operationId: getLeague
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+      responses:
+        "200": {description: Liga autorizada}
+        "404": {description: No existe o la sesión no pertenece a ella}
+  /leagues/{leagueId}/invitations:
+    post:
+      operationId: inviteLeagueMember
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+      responses:
+        "201": {description: Invitación creada}
+        "404": {description: Liga no accesible}
+        "409": {description: Límite del plan alcanzado}
+  /leagues/{leagueId}/invitations/{invitationId}:
+    delete:
+      operationId: revokeLeagueInvitation
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+        - name: invitationId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "204": {description: Invitación revocada}
+        "404": {description: Liga o invitación no accesible}
+  /invitations/{invitationId}:
+    post:
+      operationId: acceptInvitation
+      parameters:
+        - name: invitationId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Membresía creada}
+        "403": {description: La invitación corresponde a otro email}
+  /leagues/{leagueId}/members/{userId}:
+    delete:
+      operationId: removeLeagueMember
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+        - name: userId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "204": {description: Miembro expulsado conservando historial}
+        "404": {description: Liga no accesible}
+components:
+  securitySchemes:
+    bearerSession:
+      type: http
+      scheme: bearer
+  parameters:
+    LeagueId:
+      name: leagueId
+      in: path
+      required: true
+      schema: {type: string}
+  responses:
+    Forbidden:
+      description: Sesión inválida o acción no autorizada

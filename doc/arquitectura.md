@@ -1,0 +1,185 @@
+# Arquitectura de Trader
+
+## Propósito y límites
+
+Trader es una liga de rentabilidad de carteras Revolut. Es una aplicación
+Python sin API ni base de datos: el repositorio es el almacenamiento
+versionado y GitHub Actions ejecuta los procesos periódicos. El producto que
+consulta el público es una web estática en `docs/`, publicada por GitHub
+Pages, además de un ranking Markdown.
+
+El diseño separa intencionadamente tres clases de datos:
+
+| Clase | Ubicación | Visibilidad | Contenido |
+|---|---|---|---|
+| Fuente privada | correo IMAP o máquina local | privada | CSV exportado por Revolut |
+| Fuente cifrada | `players/<id>/*.csv.enc` | pública pero ilegible | extractos AES/Fernet cifrados |
+| Derivados públicos | `data/public/`, `docs/`, `data/badges.json` | pública | porcentajes, ranking, pesos de cartera y metadatos de mercado |
+
+No hay conversión de divisas: cada cartera se calcula en la moneda de su
+extracto. Por tanto, comparar porcentajes es el objetivo del sistema; no lo
+es sumar importes de jugadores con monedas distintas.
+
+El producto nuevo convive temporalmente en `tradearena/` como monolito modular.
+No importa `trader/` ni consume sus CSV o artefactos. Hasta la retirada prevista
+en la Fase 7, `trader/` sigue siendo el ranking histórico y `tradearena/` es la
+fuente de reglas de la aplicación privada.
+
+## Mapa de componentes
+
+```mermaid
+flowchart LR
+  R["CSV de Revolut"] --> I["inbox.py / cifrado local"]
+  I --> P["players/<id>/*.csv.enc"]
+  P --> L["players.py"]
+  L --> V["revolut.py"]
+  V --> C["portfolio.py"]
+  Y["Yahoo Finance"] --> PC["prices.py"]
+  Y --> AC["analysts.py"]
+  PC --> C
+  C --> O["report.py + webpage.py + badges.py"]
+  AC --> O
+  O --> D["docs/ y data/public/"]
+  D --> G["GitHub Pages"]
+```
+
+### Núcleo de dominio (`trader/`)
+
+- `__main__.py` es la frontera de línea de comandos. Expone `encrypt`,
+  `decrypt`, `report`, `ranking` e `inbox`; coordina módulos, no concentra la
+  lógica de negocio.
+- `revolut.py` convierte CSV tolerantes a variaciones de formato en `Event`.
+  Reconoce compras, ventas, ingresos/retiradas, dividendos, comisiones y
+  *splits*. Las filas desconocidas se ignoran con un aviso, en vez de romper
+  el cálculo.
+- `players.py` descubre carpetas de jugador, carga `player.json`, descifra
+  todos los `*.csv.enc` y permite CSV en claro solo para pruebas locales. La
+  clave específica `PLAYER_<ID>_KEY` tiene prioridad sobre `TRADER_KEY`.
+- `secretbox.py` cifra el contenido con Fernet. El formato propio es
+  `TRADERENC1 + salt de 16 bytes + token Fernet`; deriva la clave con PBKDF2
+  SHA-256 y 600.000 iteraciones. No modificarlo sin mantener compatibilidad
+  con los extractos ya versionados.
+- `prices.py` mantiene `data/prices/<TICKER>.csv` con cierres de Yahoo Finance.
+  `ensure_range` descarga o actualiza la caché; `close_on` arrastra el último
+  cierre para festivos y fines de semana, mientras que `has_close` distingue
+  una sesión real de mercado.
+- `portfolio.py` reproduce eventos en orden cronológico y genera `DayResult`.
+  También produce el valor actual por ticker y el desglose diario de P&L por
+  valor, que se transforma a porcentajes antes de publicarse.
+- `report.py` escribe `docs/ranking.md` y `data/public/<id>.json`. Respeta
+  `show_amounts`: solo publica valores monetarios cuando el jugador lo permite.
+- `webpage.py` construye el *payload* y lo incrusta en una única página HTML,
+  CSS y JavaScript autocontenida. `COMPETITION_START` fija el inicio efectivo
+  de la competición (actualmente 2026-07-14) para el ranking web.
+- `analysts.py` obtiene en el build el consenso de Yahoo, lo normaliza y lo
+  guarda en `data/analysts/`. Es opcional: un fallo de red conserva la caché o
+  elimina esa sección, nunca fabrica datos.
+- `badges.py` conserva en `data/badges.json` los hitos ya concedidos y el
+  récord de mayor subida. Es un histórico incremental, no un resultado que se
+  deba regenerar desde cero.
+- `inbox.py` procesa la entrada por correo IMAP: autoriza la dirección contra
+  `PLAYER_EMAILS`, exige DMARC aprobado o DKIM alineado, valida que el adjunto
+  contiene eventos Revolut y escribe el cifrado en la carpeta asignada.
+- `tickers.py` es el catálogo manual de nombre, dominio y valores relacionados
+  que consume la web. Añadir un símbolo aquí mejora su ficha, pero no afecta al
+  cálculo financiero.
+
+### Monolito modular nuevo (`tradearena/`)
+
+- `domain/` contiene dinero decimal, cartera, órdenes, ejecuciones, ledger,
+  eventos corporativos y snapshots reproducibles. No conoce HTTP, PostgreSQL,
+  Auth0 ni proveedores de precios.
+- `application/` concentra cuentas, sesiones, ligas, roles, invitaciones,
+  límites de plan y autorización. Una liga ajena se responde como inexistente.
+- `ports/` define contratos de identidad, persistencia y futuros adaptadores.
+- `adapters/` incluye identidad local firmada y almacenamiento transaccional en
+  memoria para pruebas; PostgreSQL se define en `migrations/001_initial.sql`.
+- `presentation/` publica el dispatcher REST `/api/v1` y su contrato
+  `openapi.yaml`. El servidor ASGI y el repositorio PostgreSQL ejecutable son el
+  primer trabajo de Fase 3.
+
+La migración inicial cubre usuarios, identidad, sesiones, auditoría, ligas,
+miembros, invitaciones, competiciones, carteras, órdenes, ejecuciones, ledger,
+mercado, snapshots, facturación y notificaciones. Los límites Free se vuelven a
+validar dentro de la transacción de aplicación; los índices SQL son una segunda
+defensa, no el único control.
+
+### Datos y contratos principales
+
+`players/<id>/player.json` define `display_name`, `currency` y
+`show_amounts`. Solo el primero es obligatorio en la práctica: hay valores
+por defecto. Los extractos pueden estar divididos en varios `*.csv.enc`; se
+unen y ordenan por fecha al cargar.
+
+El CSV de Revolut se espera con columnas como `Date`, `Ticker`, `Type`,
+`Quantity`, `Total Amount` y `Currency`. El parser acepta `Total` como
+alternativa y formatos de fecha y número habituales de EE. UU. y Europa.
+
+`DayResult` contiene valor inicial/final, flujo externo, P&L, retorno diario y
+retorno acumulado. `data/public/<id>.json` siempre contiene fecha y porcentajes
+diario/acumulado; con `show_amounts: true` añade inicio, fin, flujo y P&L.
+
+La web recibe además, embebidos en `docs/index.html`, los últimos 30 días,
+pesos agregados por ticker, pesos de cada cartera, operaciones recientes sin
+importe/cantidad, precio histórico público, consenso de analistas, desglose
+porcentual diario e insignias. Los valores monetarios intermedios no se
+publican cuando la configuración de privacidad no lo autoriza.
+
+## Cálculo de rentabilidad
+
+Para cada fecha desde la primera operación se aplican eventos y se valora
+efectivo más posiciones. Solo se emite una fila cuando existe un cierre real
+para al menos un ticker de la cartera; los flujos de días no bursátiles se
+acumulan hasta la siguiente sesión.
+
+La puntuación diaria usa Dietz simple:
+
+```text
+r_día = (V_final - V_inicial - flujo_externo) / (V_inicial + flujo_externo / 2)
+```
+
+Los ingresos (`TOPUP` y `TRANSFER FROM`) y retiradas no generan rendimiento;
+compras y ventas sí cambian efectivo/posiciones, dividendos suman efectivo,
+comisiones lo restan y los *splits* corrigen la cantidad. El acumulado es un
+retorno ponderado por tiempo: `producto(1 + r_día) - 1`. Antes de publicar el
+ranking, `rebase_from` reinicia esta composición en `COMPETITION_START`.
+
+## Automatización y despliegue
+
+| Workflow | Disparador | Responsabilidad |
+|---|---|---|
+| `.github/workflows/inbox.yml` | `repository_dispatch`, cron cada ~15 min o manual | lee IMAP, autentica, cifra extractos, recalcula y publica si hubo cambios |
+| `.github/workflows/ranking.yml` | horario de mercado, cierre, cambios en `players/` o `trader/`, dispatch o manual | ejecuta tests, actualiza precios/analistas, genera artefactos y abre/cierra aviso de extractos no descifrables |
+| `.github/workflows/guard.yml` | push a `main` | para la vía de token, revierte cambios fuera de la carpeta del jugador asignado en `PLAYER_OWNERS` |
+
+Los workflows de ingesta y ranking usan grupos de concurrencia y reintentos de
+`rebase` al publicar, porque ambos pueden regenerar `docs/` y `data/` a la vez.
+La carpeta `docs/` es la raíz configurada para GitHub Pages; no confundirla con
+`doc/`, que contiene documentación de mantenimiento.
+
+## Seguridad y operaciones
+
+- `TRADER_KEY` es el secreto de liga compartido. En CI permite descifrar todos
+  los extractos; una clave por jugador es una extensión soportada por las
+  variables `PLAYER_<ID>_KEY`, aunque no es el flujo configurado por defecto.
+- La ingesta por email es la vía con menor privilegio para jugadores: no les
+  entrega token ni frase. `PLAYER_EMAILS` es el control de acceso y
+  `INBOX_TRUSTED_AUTHSERV` puede restringir quién certifica DMARC/DKIM.
+- La subida web/CLI con token depende de `PLAYER_OWNERS`. El guardián es una
+  red de seguridad reactiva; no sustituye un control de escritura estricto.
+- Nunca se deben añadir CSV sin cifrar. `.gitignore` bloquea
+  `players/**/*.csv`, pero se debe revisar el diff antes de publicar.
+- Las cachés de precio, analistas y badges son datos derivados versionados. No
+  se editan a mano salvo una corrección deliberada y documentada.
+
+## Verificación local
+
+```bash
+python -m pytest tests/ -q
+python -m trader ranking --players-dir examples/players --prices-dir examples/prices --offline
+```
+
+El segundo comando usa datos ficticios y no requiere red ni secretos. Para
+probar una modificación de privacidad o de la web, inspecciona también el
+`docs/index.html` regenerado y los JSON de `data/public/` antes de incluirlos
+en un cambio.
