@@ -18,6 +18,40 @@ paths:
       responses:
         "200": {description: Dependencias disponibles}
         "503": {description: Alguna dependencia no está disponible}
+  /api/v1/auth/session:
+    post:
+      operationId: exchangeAuth0Session
+      description: Uso exclusivo del BFF; valida un ID token Auth0 y emite una sesión opaca.
+      security:
+        - internalBff: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_token, nonce]
+              properties:
+                id_token: {type: string, minLength: 1, writeOnly: true}
+                nonce: {type: string, minLength: 16, writeOnly: true}
+      responses:
+        "201":
+          description: Sesión propia emitida al BFF
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session_token, expires_in]
+                properties:
+                  session_token: {type: string, writeOnly: true}
+                  expires_in: {type: integer, minimum: 1}
+        "403": {$ref: "#/components/responses/Forbidden"}
+  /api/v1/auth/logout:
+    post:
+      operationId: revokeOwnSession
+      responses:
+        "204": {description: Sesión revocada}
+        "403": {$ref: "#/components/responses/Forbidden"}
   /api/v1/me:
     get:
       operationId: exportOwnAccount
@@ -122,6 +156,10 @@ components:
     bearerSession:
       type: http
       scheme: bearer
+    internalBff:
+      type: apiKey
+      in: header
+      name: X-TradeArena-BFF
   parameters:
     LeagueId:
       name: league_id

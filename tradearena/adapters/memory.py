@@ -78,6 +78,9 @@ class MemorySessions:
     ) -> None:
         self.store._sessions[token_hash] = (user_id, expires_at)
 
+    def revoke(self, token_hash: str, revoked_at: datetime) -> None:
+        self.store._sessions.pop(token_hash, None)
+
     def revoke_for_user(self, user_id: str, revoked_at: datetime) -> None:
         self.store._sessions = {
             token: session for token, session in self.store._sessions.items()

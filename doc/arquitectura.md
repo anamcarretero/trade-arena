@@ -116,16 +116,52 @@ tienen ciclos de vida separados. El `Dockerfile` ejecuta la API como usuario
 sin privilegios y permite usar la misma imagen para migrar sobrescribiendo el
 comando.
 
+`migrations/002_auth0_identity.sql` amplía de forma compatible la restricción
+de proveedores para enlazar el `sub` estable de Auth0 sin alterar cuentas ni
+identidades creadas por TA-030.
+
 Al crear una liga Free se bloquea la fila del propietario antes de comprobar
 su límite, y el índice parcial mantiene una segunda defensa. Al invitar o
 aceptar se bloquea la liga antes de contar miembros e invitaciones pendientes,
 de modo que dos solicitudes concurrentes no pueden consumir la misma plaza.
 
+### PWA y BFF (`web/`)
+
+TA-031 incorpora una aplicación Next.js 16 con App Router, TypeScript estricto,
+`pnpm` y rutas bilingües `/es` y `/en`. La pantalla de acceso, el alta de
+perfil, la selección de idioma y el estado autenticado son responsive. El
+manifest, el icono y un service worker limitado al shell/fallback offline
+permiten instalarla como PWA; las rutas privadas, `/auth/*`, `/language` y los
+orígenes externos no se guardan ni se interceptan. El worker devuelve siempre
+una respuesta de red, caché, fallback o error válida.
+
+Next.js es la única frontera del navegador. `/auth/login` crea `state`, `nonce`
+y PKCE S256 dentro de una transacción cifrada y `HttpOnly` de diez minutos. El
+callback intercambia el código con Auth0 desde servidor, sin entregar el ID
+token al navegador. Después llama a `POST /api/v1/auth/session` con el ID token,
+el nonce y un secreto exclusivo BFF↔API. FastAPI valida firma RS256 contra el
+JWKS, emisor del tenant europeo, audiencia, caducidad, nonce y email verificado;
+enlaza la identidad local y devuelve una sesión opaca revocable solo al BFF.
+
+El BFF cifra esa sesión con A256GCM en una cookie `HttpOnly`, `SameSite=Lax` y,
+cuando `APP_BASE_URL` usa HTTPS, `Secure` con prefijo `__Host-`. En local HTTP
+usa un nombre sin prefijo y conserva el resto de protecciones. Los Server Components y Server
+Actions descifran la cookie y añaden el bearer en la red interna. No existe
+`NEXT_PUBLIC_*` para Auth0, API o sesiones; el bundle cliente no contiene
+client secret, secreto BFF, ID/access token ni sesión opaca. Logout revoca la
+sesión en PostgreSQL antes de eliminar la cookie. La autorización de ligas
+sigue ejecutándose en FastAPI y conserva `404` para cualquier liga ajena.
+
+`web/src/lib/api-schema.d.ts` se genera desde
+`tradearena/presentation/openapi.yaml`; CI regenera el fichero y falla si hay
+deriva antes de ejecutar lint, tipos, unitarias y build de producción.
+
 ### Portabilidad operativa
 
-`Dockerfile` es el artefacto OCI común. `compose.yaml` proporciona la referencia
+`Dockerfile` es el artefacto OCI común de API/migración y `Dockerfile.web` el
+artefacto de la PWA/BFF. `compose.yaml` proporciona la referencia
 ejecutable para una máquina local o servidor Docker: PostgreSQL privado con
-volumen persistente, migración finita y API sin privilegios. `.env.example`
+volumen persistente, migración finita, API y web sin privilegios. `.env.example`
 enumera configuración sin secretos, `scripts/install-compose.sh` instala o
 actualiza y `scripts/verify-deployment.sh` ejecuta los smoke tests.
 
@@ -147,7 +183,7 @@ flowchart LR
   M["Massive con licencia"] --> J
 ```
 
-- Vercel sirve la PWA, crea previews por rama y conserva la sesión en el BFF;
+- Vercel servirá la PWA, creará previews por rama y conservará la sesión en el BFF;
   el navegador no se conecta a PostgreSQL ni recibe el token interno de API.
 - FastAPI se desplegará en un Cloud Run Service con escala a cero usando el
   servidor ASGI, el adaptador PostgreSQL y la imagen OCI de TA-030.

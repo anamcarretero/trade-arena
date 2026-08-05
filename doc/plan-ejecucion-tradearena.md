@@ -6,7 +6,8 @@ TradeArena evoluciona como un monolito modular con el dominio financiero
 Python independiente. Las Fases 0–2 están terminadas: existen reglas v1,
 dominio reproducible, casos de uso de cuentas y ligas, API FastAPI,
 persistencia PostgreSQL, migraciones e imagen OCI verificadas. TA-030 está
-terminado y el siguiente trabajo es TA-031: acceso, perfil y PWA.
+terminado. TA-031 completa acceso, perfil y PWA; el siguiente trabajo es TA-032:
+creación de liga, invitaciones y administración de miembros.
 
 ```text
 Next.js PWA/BFF — Vercel
@@ -217,9 +218,9 @@ Secuencia recomendada:
 7. Stripe y preparación de beta.
 
 Cada `/goal` debe expresar resultado, límites y verificación, y referenciar
-este documento en vez de copiar toda la especificación. El siguiente objetivo
-es TA-031 y debe conservar los artefactos de instalación y ampliar la guía si
-introduce nuevos procesos, variables o dependencias operativas.
+este documento en vez de copiar toda la especificación. TA-031 conserva los
+artefactos de instalación y amplía la guía para sus nuevos procesos, variables
+y dependencias operativas. El siguiente objetivo es TA-032.
 
 ```text
 /goal Implementa TA-031 conforme a doc/plan-ejecucion-tradearena.md: PWA

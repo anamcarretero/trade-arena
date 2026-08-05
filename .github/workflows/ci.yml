@@ -11,6 +11,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      SESSION_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      AUTH0_DOMAIN: ci.eu.auth0.com
+      AUTH0_CLIENT_ID: ci-client
+      AUTH0_CLIENT_SECRET: ci-secret
+      APP_BASE_URL: http://localhost:3000
+      API_BASE_URL: http://localhost:8080
+      BFF_SHARED_SECRET: ci-shared-secret
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Instalar dependencias PWA
+        run: pnpm install --frozen-lockfile
+      - name: Verificar cliente OpenAPI y PWA
+        run: |
+          pnpm generate:api
+          git diff --exit-code -- src/lib/api-schema.d.ts
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+          pnpm build
+
   python:
     runs-on: ubuntu-latest
     services:
@@ -48,6 +81,11 @@ jobs:
         run: |
           cp .env.example .env
           sed -i 's/replace-with-a-long-url-safe-secret/ci-only-not-a-real-secret/' .env
+          sed -i 's/replace.eu.auth0.com/ci.eu.auth0.com/' .env
+          sed -i 's/replace-with-auth0-client-id/ci-client/' .env
+          sed -i 's/replace-with-auth0-client-secret/ci-secret/' .env
+          sed -i 's/replace-with-an-independent-32-byte-secret/ci-shared-secret/' .env
+          sed -i 's/replace-with-32-base64url-bytes/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/' .env
           trap 'docker compose down --volumes' EXIT
           bash -n scripts/install-compose.sh scripts/verify-deployment.sh
           ./scripts/install-compose.sh

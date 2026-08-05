@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import date, datetime
 
-from fastapi import Depends, FastAPI, Security
+from fastapi import Depends, FastAPI, Header, Security
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -34,6 +34,13 @@ class InvitationInput(BaseModel):
 
     email: str = Field(min_length=1)
     expires_at: datetime
+
+
+class AuthSessionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id_token: str = Field(min_length=1)
+    nonce: str = Field(min_length=16)
 
 
 _bearer = HTTPBearer(auto_error=False)
@@ -81,6 +88,20 @@ def create_app(api: Api, readiness: Callable[[], bool] | None = None) -> FastAPI
     @app.get("/api/v1/me", operation_id="exportOwnAccount")
     def export_own_account(token: str | None = Depends(_token)):
         return _response(api.handle("GET", "/api/v1/me", token))
+
+    @app.post("/api/v1/auth/session", operation_id="exchangeAuth0Session")
+    def exchange_auth0_session(
+        data: AuthSessionInput,
+        bff_secret: str | None = Header(default=None, alias="X-TradeArena-BFF"),
+    ):
+        return _response(api.handle(
+            "POST", "/api/v1/auth/session", body=data.model_dump(),
+            service_token=bff_secret,
+        ))
+
+    @app.post("/api/v1/auth/logout", operation_id="revokeOwnSession")
+    def revoke_own_session(token: str | None = Depends(_token)):
+        return _response(api.handle("POST", "/api/v1/auth/logout", token))
 
     @app.delete("/api/v1/me", operation_id="deleteOwnAccount")
     def delete_own_account(token: str | None = Depends(_token)):

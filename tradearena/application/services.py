@@ -70,6 +70,12 @@ class SessionService:
                 raise Forbidden("sesión inválida")
             return user_id
 
+    def revoke(self, token: str | None, now: datetime | None = None) -> None:
+        if not token:
+            return
+        with self.store.transaction() as uow:
+            uow.sessions.revoke(self._hash(token), now or self._clock())
+
     @staticmethod
     def _hash(token: str) -> str:
         return hashlib.sha256(token.encode()).hexdigest()
@@ -93,6 +99,11 @@ class AuthService:
 
     def login_google(self, claims: dict[str, object], now: datetime) -> str:
         assertion = self.identity.verify_google_claims(claims)
+        user = self.accounts.login(assertion, now)
+        return self.sessions.issue(user.id, now)
+
+    def exchange_auth0(self, id_token: str, nonce: str, now: datetime) -> str:
+        assertion = self.identity.verify_id_token(id_token, nonce)
         user = self.accounts.login(assertion, now)
         return self.sessions.issue(user.id, now)
 

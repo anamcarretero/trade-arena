@@ -1,0 +1,26 @@
+FROM node:24.13.1-alpine AS dependencies
+WORKDIR /app
+RUN corepack enable
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+
+FROM node:24.13.1-alpine AS build
+WORKDIR /app
+RUN corepack enable
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY web/ ./
+COPY tradearena/presentation/openapi.yaml /openapi.yaml
+RUN pnpm exec openapi-typescript /openapi.yaml -o src/lib/api-schema.d.ts && pnpm build
+
+FROM node:24.13.1-alpine AS runtime
+ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
+WORKDIR /app
+RUN addgroup -S tradearena && adduser -S -G tradearena tradearena
+COPY --from=build --chown=tradearena:tradearena /app/public ./public
+COPY --from=build --chown=tradearena:tradearena /app/.next/standalone ./
+COPY --from=build --chown=tradearena:tradearena /app/.next/static ./.next/static
+USER tradearena
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1
+CMD ["node", "server.js"]

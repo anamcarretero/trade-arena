@@ -1,0 +1,33 @@
+{
+  "name": "tradearena-web",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.20.0",
+  "engines": {"node": ">=24"},
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "generate:api": "openapi-typescript ../tradearena/presentation/openapi.yaml -o src/lib/api-schema.d.ts",
+    "verify": "pnpm generate:api && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "dependencies": {
+    "jose": "6.2.8",
+    "next": "16.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.0",
+    "openapi-typescript": "latest",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  }
+}
