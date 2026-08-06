@@ -117,6 +117,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listOwnInvitations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/leagues/{league_id}": {
         parameters: {
             query?: never;
@@ -200,7 +216,58 @@ export interface paths {
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: never;
+    schemas: {
+        /** @enum {string} */
+        Role: "owner" | "admin" | "member";
+        /** @enum {string} */
+        InvitationStatus: "pending" | "accepted" | "revoked" | "expired";
+        LeagueMember: {
+            user_id: string;
+            display_name: string;
+            role: components["schemas"]["Role"];
+            /** Format: date-time */
+            joined_at: string;
+        };
+        LeagueInvitation: {
+            id: string;
+            /** Format: email */
+            email: string;
+            role: components["schemas"]["Role"];
+            /** Format: date-time */
+            expires_at: string;
+            status: components["schemas"]["InvitationStatus"];
+        };
+        LeagueDetail: {
+            id: string;
+            name: string;
+            owner_id: string;
+            /** Format: date-time */
+            created_at: string;
+            active: boolean;
+            /** @enum {string} */
+            plan: "free";
+            actor_role: components["schemas"]["Role"];
+            max_members: number;
+            members: components["schemas"]["LeagueMember"][];
+            /** @description Solo se devuelve a propietario o administrador. */
+            invitations: components["schemas"]["LeagueInvitation"][];
+        };
+        OwnInvitation: {
+            id: string;
+            league_id: string;
+            league_name: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        CreatedInvitation: {
+            id: string;
+            /** Format: email */
+            email: string;
+            /** Format: date-time */
+            expires_at: string;
+            status: components["schemas"]["InvitationStatus"];
+        };
+    };
     responses: {
         /** @description Sesión inválida o acción no autorizada */
         Forbidden: {
@@ -401,7 +468,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["LeagueDetail"][];
+                };
             };
         };
     };
@@ -425,7 +494,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["LeagueDetail"];
+                };
             };
             /** @description Límite del plan alcanzado */
             409: {
@@ -433,6 +504,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    listOwnInvitations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invitaciones pendientes ligadas al email de la sesión */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnInvitation"][];
+                };
             };
         };
     };
@@ -447,12 +538,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Liga autorizada */
+            /** @description Liga autorizada con miembros e invitaciones visibles por rol */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["LeagueDetail"];
+                };
             };
             /** @description No existe o la sesión no pertenece a ella */
             404: {
@@ -472,14 +565,23 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: email */
+                    email: string;
+                };
+            };
+        };
         responses: {
-            /** @description Invitación creada */
+            /** @description Enlace de invitación creado; caduca a los siete días */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CreatedInvitation"];
+                };
             };
             /** @description Liga no accesible */
             404: {
@@ -543,8 +645,8 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La invitación corresponde a otro email */
-            403: {
+            /** @description Invitación no utilizable por esta sesión */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

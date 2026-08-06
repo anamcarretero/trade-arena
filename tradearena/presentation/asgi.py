@@ -32,8 +32,7 @@ class LeagueInput(BaseModel):
 class InvitationInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    email: str = Field(min_length=1)
-    expires_at: datetime
+    email: str = Field(min_length=3, max_length=254)
 
 
 class AuthSessionInput(BaseModel):
@@ -116,6 +115,10 @@ def create_app(api: Api, readiness: Callable[[], bool] | None = None) -> FastAPI
     @app.get("/api/v1/leagues", operation_id="listOwnLeagues")
     def list_own_leagues(token: str | None = Depends(_token)):
         return _response(api.handle("GET", "/api/v1/leagues", token))
+
+    @app.get("/api/v1/invitations", operation_id="listOwnInvitations")
+    def list_own_invitations(token: str | None = Depends(_token)):
+        return _response(api.handle("GET", "/api/v1/invitations", token))
 
     @app.post("/api/v1/leagues", operation_id="createLeague")
     def create_league(data: LeagueInput, token: str | None = Depends(_token)):

@@ -120,10 +120,22 @@ comando.
 de proveedores para enlazar el `sub` estable de Auth0 sin alterar cuentas ni
 identidades creadas por TA-030.
 
+`migrations/003_league_reads.sql` añade índices parciales para listar miembros
+activos e invitaciones pendientes por email sin modificar ni eliminar el
+historial existente.
+
 Al crear una liga Free se bloquea la fila del propietario antes de comprobar
 su límite, y el índice parcial mantiene una segunda defensa. Al invitar o
 aceptar se bloquea la liga antes de contar miembros e invitaciones pendientes,
 de modo que dos solicitudes concurrentes no pueden consumir la misma plaza.
+
+En TA-032 la invitación se entrega como un enlace opaco de alta entropía que
+el propietario o administrador copia y comparte por el canal que elija; la
+aplicación todavía no envía correo. El enlace caduca, puede revocarse y solo lo
+puede aceptar una sesión cuyo email verificado coincida. Un enlace inexistente,
+caducado, revocado o abierto con otra cuenta no revela la liga y responde
+`404`; la PWA no muestra el código HTTP y presenta un único mensaje útil sin
+distinguir cuál de esas condiciones se produjo.
 
 ### PWA y BFF (`web/`)
 
@@ -155,6 +167,13 @@ sigue ejecutándose en FastAPI y conserva `404` para cualquier liga ajena.
 `web/src/lib/api-schema.d.ts` se genera desde
 `tradearena/presentation/openapi.yaml`; CI regenera el fichero y falla si hay
 deriva antes de ejecutar lint, tipos, unitarias y build de producción.
+
+TA-032 añade al BFF y a la PWA el listado, creación y detalle de ligas, las dos
+plazas Free, miembros e invitaciones recibidas. Las mutaciones son Server
+Actions que solo transmiten referencias y datos de formulario al API; FastAPI
+vuelve a autenticar, autorizar y aplicar los límites dentro de la transacción.
+El único componente cliente nuevo copia el enlace de invitación y no recibe la
+sesión opaca ni ninguna credencial interna.
 
 ### Portabilidad operativa
 

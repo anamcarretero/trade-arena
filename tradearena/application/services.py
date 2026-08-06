@@ -9,7 +9,9 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
 from .models import (
-    Invitation, InvitationStatus, League, Membership, Profile, Role, User,
+    Invitation, InvitationStatus, League, LeagueInvitationView,
+    LeagueMemberView, LeagueView, Membership, OwnInvitationView, Profile, Role,
+    User,
 )
 from tradearena.ports.identity import IdentityAssertion
 from tradearena.ports.store import StoreConflict
@@ -209,6 +211,7 @@ class AccountService:
 class LeagueService:
     FREE_MAX_ACTIVE_LEAGUES = 1
     FREE_MAX_MEMBERS = 2
+    INVITATION_TTL = timedelta(days=7)
 
     def __init__(self, store, id_factory: Callable[[], str]) -> None:
         self.store = store
@@ -239,37 +242,63 @@ class LeagueService:
                 raise PlanLimitExceeded("Free permite una liga activa") from exc
             raise Conflict("escritura duplicada") from exc
 
-    def get(self, actor_id: str, league_id: str) -> League:
+    def get(self, actor_id: str, league_id: str, now: datetime) -> LeagueView:
         with self.store.transaction() as uow:
-            self._membership(uow, actor_id, league_id)
+            actor = self._membership(uow, actor_id, league_id)
             league = uow.leagues.get(league_id)
             if not league:
                 raise NotFound("liga no encontrada")
-            return league
+            return self._view(uow, league, actor, now)
 
-    def list_for(self, actor_id: str) -> list[League]:
+    def list_for(self, actor_id: str, now: datetime) -> list[LeagueView]:
         with self.store.transaction() as uow:
-            return uow.leagues.list_for_user(actor_id)
+            result = []
+            for league in uow.leagues.list_for_user(actor_id):
+                actor = self._membership(uow, actor_id, league.id)
+                result.append(self._view(uow, league, actor, now))
+            return result
+
+    def list_invitations(
+        self, actor_id: str, now: datetime
+    ) -> list[OwnInvitationView]:
+        with self.store.transaction() as uow:
+            user = uow.users.get(actor_id)
+            if not user or user.deleted_at is not None:
+                raise Forbidden("cuenta no activa")
+            result = []
+            for invitation in uow.invitations.list_pending_for_email(
+                user.email, now
+            ):
+                league = uow.leagues.get(invitation.league_id)
+                if league and league.active:
+                    result.append(OwnInvitationView(
+                        invitation.id, league.id, league.name,
+                        invitation.expires_at,
+                    ))
+            return result
 
     def invite(
-        self, actor_id: str, league_id: str, email: str,
-        expires_at: datetime, now: datetime,
+        self, actor_id: str, league_id: str, email: str, now: datetime,
     ) -> Invitation:
         with self.store.transaction() as uow:
-            if expires_at <= now:
-                raise InvalidInput("la invitación debe caducar en el futuro")
             actor = self._membership(uow, actor_id, league_id)
             if actor.role not in {Role.OWNER, Role.ADMIN}:
                 raise Forbidden("el rol no permite invitar")
             league = uow.leagues.get(league_id, for_update=True)
             if not league:
                 raise NotFound("liga no encontrada")
+            normalized_email = self._normalize_email(email)
+            invited_user = uow.users.get_by_email(normalized_email)
+            if invited_user:
+                existing = uow.memberships.get(league_id, invited_user.id)
+                if existing and existing.removed_at is None:
+                    raise Conflict("esa persona ya pertenece a la liga")
             occupied = self._occupied_slots(uow, league_id, now)
             if league.plan == "free" and occupied >= self.FREE_MAX_MEMBERS:
                 raise PlanLimitExceeded("Free permite dos miembros, incluidas invitaciones")
             invitation = Invitation(
-                self._id(), league_id, email.strip().lower(), Role.MEMBER,
-                actor_id, now, expires_at,
+                self._id(), league_id, normalized_email, Role.MEMBER,
+                actor_id, now, now + self.INVITATION_TTL,
             )
             uow.invitations.save(invitation)
             uow.audit.add(
@@ -295,34 +324,48 @@ class LeagueService:
             )
 
     def accept(self, actor_id: str, invitation_id: str, now: datetime) -> Membership:
+        membership = None
+        expired = False
         with self.store.transaction() as uow:
             invitation = uow.invitations.get(invitation_id)
             if not invitation:
                 raise NotFound("invitación no encontrada")
             if invitation.status is not InvitationStatus.PENDING:
-                raise Conflict("la invitación ya no está pendiente")
+                raise NotFound("invitación no encontrada")
+            user = uow.users.get(actor_id)
+            if not user or user.email.lower() != invitation.email:
+                raise NotFound("invitación no encontrada")
             if now >= invitation.expires_at:
                 invitation.status = InvitationStatus.EXPIRED
                 uow.invitations.save(invitation)
-                raise Conflict("la invitación ha caducado")
-            user = uow.users.get(actor_id)
-            if not user or user.email.lower() != invitation.email:
-                raise Forbidden("la invitación pertenece a otro email")
-            league = uow.leagues.get(invitation.league_id, for_update=True)
-            if not league:
-                raise NotFound("liga no encontrada")
-            active_members = uow.memberships.count_active(league.id)
-            if league.plan == "free" and active_members >= self.FREE_MAX_MEMBERS:
-                raise PlanLimitExceeded("la liga Free ya está completa")
-            membership = Membership(league.id, actor_id, invitation.role, now)
-            uow.memberships.save(membership)
-            invitation.status = InvitationStatus.ACCEPTED
-            invitation.accepted_by = actor_id
-            uow.invitations.save(invitation)
-            uow.audit.add(
-                now, actor_id, "invitation.accepted", "league", league.id
-            )
-            return membership
+                uow.audit.add(
+                    now, actor_id, "invitation.expired", "invitation",
+                    invitation.id,
+                )
+                expired = True
+            else:
+                league = uow.leagues.get(invitation.league_id, for_update=True)
+                if not league:
+                    raise NotFound("liga no encontrada")
+                existing = uow.memberships.get(league.id, actor_id)
+                if existing and existing.removed_at is None:
+                    raise NotFound("invitación no encontrada")
+                active_members = uow.memberships.count_active(league.id)
+                if league.plan == "free" \
+                        and active_members >= self.FREE_MAX_MEMBERS:
+                    raise PlanLimitExceeded("la liga Free ya está completa")
+                membership = Membership(league.id, actor_id, invitation.role, now)
+                uow.memberships.save(membership)
+                invitation.status = InvitationStatus.ACCEPTED
+                invitation.accepted_by = actor_id
+                uow.invitations.save(invitation)
+                uow.audit.add(
+                    now, actor_id, "invitation.accepted", "league", league.id
+                )
+        if expired:
+            raise NotFound("invitación no encontrada")
+        assert membership is not None
+        return membership
 
     def remove_member(
         self, actor_id: str, league_id: str, user_id: str, now: datetime
@@ -355,3 +398,51 @@ class LeagueService:
             uow.memberships.count_active(league_id)
             + uow.invitations.count_pending(league_id, now)
         )
+
+    def _view(
+        self, uow, league: League, actor: Membership, now: datetime
+    ) -> LeagueView:
+        members = []
+        role_order = {Role.OWNER: 0, Role.ADMIN: 1, Role.MEMBER: 2}
+        active_members = sorted(
+            uow.memberships.list_active_for_league(league.id),
+            key=lambda membership: (
+                role_order[membership.role], membership.joined_at,
+                membership.user_id,
+            ),
+        )
+        for membership in active_members:
+            profile = uow.profiles.get(membership.user_id)
+            members.append(LeagueMemberView(
+                membership.user_id,
+                profile.display_name if profile else "",
+                membership.role,
+                membership.joined_at,
+            ))
+        invitations = ()
+        if actor.role in {Role.OWNER, Role.ADMIN}:
+            invitations = tuple(
+                LeagueInvitationView(
+                    invitation.id, invitation.email, invitation.role,
+                    invitation.expires_at, invitation.status,
+                )
+                for invitation in uow.invitations.list_for_league(league.id)
+                if invitation.status is InvitationStatus.PENDING
+                and invitation.expires_at > now
+            )
+        return LeagueView(
+            league.id, league.name, league.owner_id, league.created_at,
+            league.active, league.plan, actor.role, self.FREE_MAX_MEMBERS,
+            tuple(members), invitations,
+        )
+
+    @staticmethod
+    def _normalize_email(email: str) -> str:
+        normalized = email.strip().lower()
+        if len(normalized) > 254 or normalized.count("@") != 1 \
+                or any(character.isspace() for character in normalized):
+            raise InvalidInput("el email de la invitación no es válido")
+        local, domain = normalized.split("@", 1)
+        if not local or not domain or "." not in domain:
+            raise InvalidInput("el email de la invitación no es válido")
+        return normalized

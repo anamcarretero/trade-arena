@@ -6,8 +6,9 @@ TradeArena evoluciona como un monolito modular con el dominio financiero
 Python independiente. Las Fases 0–2 están terminadas: existen reglas v1,
 dominio reproducible, casos de uso de cuentas y ligas, API FastAPI,
 persistencia PostgreSQL, migraciones e imagen OCI verificadas. TA-030 está
-terminado. TA-031 completa acceso, perfil y PWA; el siguiente trabajo es TA-032:
-creación de liga, invitaciones y administración de miembros.
+terminado. TA-031 completa acceso, perfil y PWA; TA-032 añade creación de liga,
+invitaciones mediante enlace y administración de miembros. El siguiente bloque
+es TA-033: competiciones.
 
 ```text
 Next.js PWA/BFF — Vercel
@@ -103,8 +104,9 @@ La instalación genérica resultante se conserva en `Dockerfile`, `compose.yaml`
 1. Crear Next.js/PWA con tokens de diseño, accesibilidad base,
    internacionalización ES/EN y cliente generado desde OpenAPI.
 2. Integrar Auth0 mediante el BFF y sesión `HttpOnly`.
-3. Implementar alta, perfil, edad, consentimiento, ligas, invitaciones,
-   miembros, exportación y borrado.
+3. Implementar alta, perfil, edad, consentimiento, ligas, invitaciones mediante
+   enlace copiable y miembros. La exportación y borrado desde la PWA, así como
+   el envío de correo, quedan fuera de esta fase.
 4. Añadir E2E de dos personas y de acceso directo a una liga ajena.
 
 **Salida:** dos cuentas pueden crear y gestionar una liga privada desde la PWA
@@ -181,8 +183,9 @@ ejecuciones, apuntes o snapshots.
 - Validación de OpenAPI y del cliente TypeScript generado.
 - E2E de acceso, invitación, competición, orden, ejecución y ranking con dos
   participantes.
-- Pruebas negativas de autorización, edad, sesión revocada, invitación ajena y
-  privacidad.
+- Pruebas negativas de autorización, edad, sesión revocada, invitación ajena,
+  caducada o revocada y privacidad; esos enlaces responden `404` sin revelar la
+  liga y la PWA muestra un mensaje comprensible, no el código HTTP.
 - Repetir o interrumpir jobs no duplica ejecuciones, ledger ni snapshots.
 - Migraciones verificadas sobre esquema vacío y sobre la versión anterior.
 - Smoke tests de staging y restauración ensayada antes de beta.
@@ -218,15 +221,14 @@ Secuencia recomendada:
 7. Stripe y preparación de beta.
 
 Cada `/goal` debe expresar resultado, límites y verificación, y referenciar
-este documento en vez de copiar toda la especificación. TA-031 conserva los
-artefactos de instalación y amplía la guía para sus nuevos procesos, variables
-y dependencias operativas. El siguiente objetivo es TA-032.
+este documento en vez de copiar toda la especificación. TA-032 conserva los
+artefactos de instalación, el BFF y el sistema visual de TA-031. El siguiente
+objetivo es TA-033.
 
 ```text
-/goal Implementa TA-031 conforme a doc/plan-ejecucion-tradearena.md: PWA
-responsive ES/EN, acceso Auth0 mediante BFF, perfil y sesión HttpOnly. Conserva
-la autorización 404 entre ligas y actualiza instalación, variables, OpenAPI,
-pruebas y documentación operativa en el mismo cambio.
+/goal Implementa TA-033 conforme a doc/plan-ejecucion-tradearena.md: creación y
+comienzo de competición con rules_snapshot visible e inmutable. Conserva el
+BFF, la autorización 404 entre ligas y el alcance separado de cartera/ranking.
 ```
 
 ## 6. Supuestos y puertas

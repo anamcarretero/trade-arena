@@ -14,7 +14,7 @@ añaden participante autenticado, propietario y administrador de liga. Sus
 recursos son privados y solo se exponen por `/api/v1` tras validar sesión y
 membresía activa.
 
-## 0. Flujos del producto nuevo hasta Fase 2
+## 0. Flujos del producto nuevo hasta TA-032
 
 1. Identidad verifica un enlace de email de un solo uso o claims Google con
    emisor, audiencia y email verificado; después se emite una sesión propia.
@@ -23,13 +23,19 @@ membresía activa.
    anonimiza sin destruir la auditoría financiera.
 3. Free permite crear una liga activa con capital virtual inicial fijo de
    3.000 USD por competición. El creador es propietario y puede invitar un
-   segundo miembro. La invitación ocupa plaza, está ligada al email, caduca y
-   puede revocarse.
+   segundo miembro. La aplicación genera un enlace para copiar y compartir;
+   todavía no envía la invitación por correo. La invitación ocupa plaza, está
+   ligada al email, caduca y puede revocarse.
 4. Solo propietario/administrador invita o expulsa. La persona expulsada deja
    de tener acceso; su historial se conserva para auditoría.
 5. Cada acceso directo como `GET /api/v1/leagues/{id}` vuelve a comprobar la
    pertenencia. Una cuenta externa recibe `404`, también al intentar mutaciones,
    para evitar enumerar ligas privadas.
+6. Al abrir un enlace de invitación, la persona inicia sesión con el email
+   invitado y lo acepta. Si el enlace no es válido, ha caducado, fue revocado o
+   pertenece a otro email, la API responde `404` sin revelar la liga y la PWA
+   muestra: «No puedes acceder a esta liga con esta invitación. Comprueba que
+   has iniciado sesión con el correo invitado o solicita un enlace nuevo».
 
 TA-031 incorpora la PWA para acceso, perfil e idioma. El contrato HTTP está en
 `tradearena/presentation/openapi.yaml`; FastAPI incluye sondas `/health/live`
@@ -37,6 +43,24 @@ y `/health/ready`, intercambio Auth0 exclusivo del BFF y comprobación
 automática de rutas/`operationId`. Las pruebas de abuso directo siguen en
 `tests/tradearena/test_authorization.py` y verifican que la incorporación del
 BFF no cambia el `404` de ligas ajenas.
+
+### Ligas e invitaciones en la PWA
+
+1. La portada autenticada lista únicamente las ligas de la sesión y las
+   invitaciones pendientes ligadas a su email verificado.
+2. Una persona sin liga propia crea una liga Free. FastAPI bloquea la cuenta y
+   vuelve a comprobar dentro de la transacción que no posea otra liga activa.
+3. El detalle presenta dos plazas: miembro activo, invitación pendiente o
+   plaza disponible. Solo propietario o administrador ve los emails y acciones
+   de administración.
+4. Al invitar, el backend normaliza el email, bloquea la liga, reserva la plaza
+   durante siete días y devuelve el identificador opaco. La PWA construye un
+   enlace copiable; no envía correo.
+5. La persona invitada abre el enlace, inicia sesión con el email indicado y
+   acepta. FastAPI bloquea invitación y liga antes de convertir la reserva en
+   membresía. Un enlace ajeno o no utilizable produce el mismo `404` y mensaje.
+6. Revocar conserva la fila de invitación y expulsar fija `removed_at`; ambas
+   acciones añaden auditoría y liberan la plaza sin borrar el historial.
 
 ### Acceso Auth0, perfil e idioma en la PWA
 

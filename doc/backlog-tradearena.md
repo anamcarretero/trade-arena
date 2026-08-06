@@ -28,15 +28,17 @@
 
 1. TA-031 PWA responsive bilingüe: acceso Auth0 mediante BFF, perfil, selección
    de idioma, sesión cifrada `HttpOnly`, cliente OpenAPI y Compose local.
+2. TA-032 ligas privadas en la PWA: listado, creación y detalle, dos plazas
+   Free, invitaciones mediante enlace copiable, aceptación, revocación y
+   expulsión con autorización y límites transaccionales en backend.
 
 ## Siguiente — Fase 3
 
-1. TA-032 creación de liga, invitaciones y administración de miembros.
-2. TA-033 competición y confirmación visible de `rules_snapshot`.
-3. TA-034 cartera, orden, historial, ranking y marca de incorporación tardía.
-4. TA-035 centro de notificaciones, exportación y borrado desde la PWA.
-5. TA-036 accesibilidad WCAG 2.2 AA y pruebas E2E de dos participantes.
-6. TA-037 staging reproducible: Vercel, Neon Frankfurt, Cloud Run Frankfurt,
+1. TA-033 competición y confirmación visible de `rules_snapshot`.
+2. TA-034 cartera, orden, historial, ranking y marca de incorporación tardía.
+3. TA-035 centro de notificaciones, exportación y borrado desde la PWA.
+4. TA-036 accesibilidad WCAG 2.2 AA y pruebas E2E de dos participantes.
+5. TA-037 staging reproducible: Vercel, Neon Frankfurt, Cloud Run Frankfurt,
    Secret Manager y GitHub OIDC; ramas Neon efímeras para integración en PR.
 
 ## Fases 4–7
