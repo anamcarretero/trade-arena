@@ -258,7 +258,7 @@ def test_reported_trade_accepts_madrid_time_and_decimal_commas_by_default():
         f"/api/v1/leagues/{league_id}/competitions/{competition['id']}/reported-trades",
         headers=headers,
         json={
-            "date": "2026-08-05T14:00:00", "ticker": "MU", "type": "buy",
+            "date": "2026-08-05T10:11:00", "ticker": "MU", "type": "buy",
             "quantity": "1", "price_per_share": "855,70",
             "total_amount": "856,85", "currency": "USD", "fx_rate": "1",
             "client_trade_id": "madrid-comma",
@@ -268,7 +268,7 @@ def test_reported_trade_accepts_madrid_time_and_decimal_commas_by_default():
     execution = response.json()["executions"][0]
     assert execution["price"] == "855.7000"
     assert execution["commission"] == "1.15"
-    assert execution["executed_at"] == "2026-08-05T14:00:00+02:00"
+    assert execution["executed_at"] == "2026-08-05T10:11:00+02:00"
 
 
 def test_api_accepts_optional_decimal_comma_commissions():

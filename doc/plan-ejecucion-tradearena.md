@@ -155,7 +155,7 @@ deterministas y obtienen el mismo ranking reproducible.
 
 ### Ampliación TA-035 — fracciones y ejecuciones registradas manualmente
 
-**Estado:** completada con las migraciones 006 y 007, API/BFF/PWA bilingüe y pruebas
+**Estado:** completada con las migraciones 006, 007 y 008, API/BFF/PWA bilingüe y pruebas
 reproducibles en memoria y PostgreSQL 16.
 
 1. Sustituir cantidades enteras por cantidades decimales positivas de hasta

@@ -147,6 +147,11 @@ no negativa. Conserva los datos existentes: las órdenes anteriores quedan sin
 valor explícito y, si aún están pendientes, usan al ejecutarse el respaldo del
 `rules_snapshot` que ya tenían asignado.
 
+`migrations/008_initial_participant_calendar_join.sql` alinea la incorporación
+de los participantes iniciales con el comienzo del calendario de competición,
+también cuando el administrador la inicia más tarde. Solo corrige filas con
+`joined_late=false`; una incorporación tardía conserva su instante real.
+
 Al crear una liga Free se bloquea la fila del propietario antes de comprobar
 su límite, y el índice parcial mantiene una segunda defensa. Al invitar o
 aceptar se bloquea la liga antes de contar miembros e invitaciones pendientes,
@@ -227,7 +232,9 @@ permanece cifrada en la cookie `HttpOnly` del BFF.
 
 TA-035 materializa como participantes a todos los miembros activos al iniciar
 y crea para cada uno una cartera con el capital de `rules_snapshot`; en Free
-son exactamente `3000.00 USD`. Aceptar una invitación después del inicio crea
+son exactamente `3000.00 USD`. Su incorporación se fija en el inicio del
+calendario, por lo que pueden declarar operaciones realizadas desde ese
+instante aunque la competición se activase después. Aceptar una invitación después del inicio crea
 la cartera en la misma transacción con el capital íntegro y `joined_late=true`.
 La expulsión corta el acceso, pero conserva el historial financiero.
 

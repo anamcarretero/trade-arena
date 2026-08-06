@@ -60,6 +60,7 @@ def test_start_materializes_every_active_member_with_exact_free_capital(context)
     assert {item.user_id for item in accounts} == {owner.id, member.id}
     assert {item.portfolio.initial_cash for item in accounts} == {Decimal("3000.00")}
     assert all(not item.joined_late for item in accounts)
+    assert {item.joined_at for item in accounts} == {competition.starts_at}
 
 
 def test_order_execution_history_ledger_and_idempotency(context):

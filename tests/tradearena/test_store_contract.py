@@ -131,6 +131,7 @@ def postgres_store():
             "001_initial", "002_auth0_identity", "003_league_reads",
             "004_competitions", "005_trading_ranking",
             "006_fractional_reported_trades", "007_user_commissions",
+            "008_initial_participant_calendar_join",
         ]
         assert migrate(dsn) == []
         yield PostgresStore(dsn)
@@ -175,6 +176,7 @@ def test_auth0_migration_upgrades_the_previous_schema(postgres_store, tmp_path):
             "002_auth0_identity", "003_league_reads", "004_competitions",
             "005_trading_ranking", "006_fractional_reported_trades",
             "007_user_commissions",
+            "008_initial_participant_calendar_join",
         ]
         assert migrate(previous_dsn) == []
     finally:
@@ -201,6 +203,7 @@ def test_trading_migration_upgrades_ta034_schema(postgres_store, tmp_path):
         assert migrate(previous_dsn) == [
             "005_trading_ranking", "006_fractional_reported_trades",
             "007_user_commissions",
+            "008_initial_participant_calendar_join",
         ]
     finally:
         with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
@@ -224,7 +227,8 @@ def test_fractional_reported_migration_upgrades_ta035_schema(postgres_store, tmp
             "004_competitions", "005_trading_ranking",
         ]
         assert migrate(previous_dsn) == [
-            "006_fractional_reported_trades", "007_user_commissions"
+            "006_fractional_reported_trades", "007_user_commissions",
+            "008_initial_participant_calendar_join",
         ]
         with psycopg.connect(previous_dsn, row_factory=psycopg.rows.dict_row) as connection:
             columns = connection.execute(

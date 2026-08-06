@@ -123,7 +123,9 @@ TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
 
 1. Al iniciar una competición, el backend incorpora a cada miembro activo y
    crea su cartera. El importe se lee de `rules_snapshot`; Free concede
-   exactamente `3000.00 USD`.
+   exactamente `3000.00 USD`. Para estos participantes iniciales, `joined_at`
+   es el comienzo del calendario aunque el borrador se active más tarde; así
+   pueden declarar operaciones desde la fecha competitiva fijada.
 2. Si una persona acepta la invitación después del inicio, membresía,
    participación y cartera se crean en la misma transacción. Recibe los
    `3000.00 USD` completos y aparece con «Incorporación tardía»/«Late entry».

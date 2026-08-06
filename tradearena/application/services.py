@@ -552,7 +552,8 @@ class CompetitionService:
             ))
             for membership in uow.memberships.list_active_for_league(league_id):
                 uow.trading.add(TradingAccount(
-                    competition.id, membership.user_id, now, False,
+                    competition.id, membership.user_id,
+                    competition.starts_at, False,
                     Portfolio(self._id(), initial_cash),
                 ))
             uow.audit.add(
