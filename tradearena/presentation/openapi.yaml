@@ -56,13 +56,55 @@ paths:
     get:
       operationId: exportOwnAccount
       responses:
-        "200": {description: Datos propios exportables}
+        "200":
+          description: Exportación completa y reproducible de datos propios, sin sesiones ni credenciales
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AccountExport"}
         "403": {$ref: "#/components/responses/Forbidden"}
     delete:
       operationId: deleteOwnAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirm_account_deletion]
+              properties:
+                confirm_account_deletion: {type: boolean, const: true}
       responses:
         "204": {description: Cuenta eliminada}
+        "400": {description: Falta confirmación explícita}
         "403": {$ref: "#/components/responses/Forbidden"}
+  /api/v1/notifications:
+    get:
+      operationId: listOwnNotifications
+      responses:
+        "200":
+          description: Notificaciones privadas de la sesión, nuevas primero
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/Notification"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+  /api/v1/notifications/{notification_id}/read:
+    post:
+      operationId: markOwnNotificationRead
+      parameters:
+        - name: notification_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Notificación propia marcada como leída de forma idempotente
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Notification"}
+        "404": {description: Notificación inexistente o ajena}
   /api/v1/me/profile:
     patch:
       operationId: updateOwnProfile
@@ -359,6 +401,28 @@ paths:
         "404": {description: Liga no accesible}
 components:
   schemas:
+    AccountExport:
+      type: object
+      required: [schema_version, user, profile, memberships, invitations, notifications, financial_history, audit]
+      properties:
+        schema_version: {type: string, const: "1"}
+        user: {type: object, additionalProperties: true}
+        profile: {oneOf: [{type: object, additionalProperties: true}, {type: "null"}]}
+        memberships: {type: array, items: {type: object, additionalProperties: true}}
+        invitations: {type: array, items: {type: object, additionalProperties: true}}
+        notifications: {type: array, items: {$ref: "#/components/schemas/Notification"}}
+        financial_history: {type: array, items: {type: object, additionalProperties: true}}
+        audit: {type: array, items: {type: object, additionalProperties: true}}
+    Notification:
+      type: object
+      additionalProperties: false
+      required: [id, kind, payload, created_at, read_at]
+      properties:
+        id: {type: string}
+        kind: {type: string}
+        payload: {type: object, additionalProperties: true}
+        created_at: {type: string, format: date-time}
+        read_at: {oneOf: [{type: string, format: date-time}, {type: "null"}]}
     Role:
       type: string
       enum: [owner, admin, member]

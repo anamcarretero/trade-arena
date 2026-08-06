@@ -9,7 +9,7 @@ from datetime import datetime
 
 from tradearena.application.models import (
     AuditEvent, Competition, Invitation, InvitationStatus, League, Membership,
-    Profile, TradingAccount, User,
+    Notification, Profile, TradingAccount, User,
 )
 from tradearena.domain.ranking import RankingSnapshot
 
@@ -195,6 +195,11 @@ class MemoryInvitations:
             and invitation.expires_at > now
         )
 
+    def anonymize_email(self, email: str, replacement: str) -> None:
+        for invitation in self.store._invitations.values():
+            if invitation.email.lower() == email.lower():
+                invitation.email = replacement
+
 
 class MemoryCompetitions:
     def __init__(self, store: "MemoryStore") -> None:
@@ -272,6 +277,13 @@ class MemoryTrading:
             key=lambda item: (item.joined_at, item.user_id),
         )
 
+    def list_for_user(self, user_id: str) -> list[TradingAccount]:
+        return sorted(
+            (copy.deepcopy(item) for item in self.store._trading.values()
+             if item.user_id == user_id),
+            key=lambda item: (item.competition_id, item.portfolio.id),
+        )
+
     def save_ranking(self, snapshot: RankingSnapshot) -> None:
         key = (snapshot.competition_id, snapshot.as_of)
         current = self.store._rankings.get(key)
@@ -298,6 +310,46 @@ class MemoryAudit:
             resource_type, resource_id, metadata or {},
         ))
 
+    def list_for_user(self, user_id: str) -> list[AuditEvent]:
+        return [copy.deepcopy(item) for item in self.store._audit if (
+            item.actor_id == user_id
+            or (item.resource_type == "user" and item.resource_id == user_id)
+            or item.metadata.get("user_id") == user_id
+        )]
+
+
+class MemoryNotifications:
+    def __init__(self, store: "MemoryStore") -> None:
+        self.store = store
+
+    def get(
+        self, notification_id: str, *, for_update: bool = False,
+    ) -> Notification | None:
+        item = self.store._notifications.get(notification_id)
+        return copy.deepcopy(item)
+
+    def add(self, notification: Notification) -> None:
+        if notification.id in self.store._notifications:
+            raise ValueError("la notificación ya existe")
+        self.store._notifications[notification.id] = copy.deepcopy(notification)
+
+    def save(self, notification: Notification) -> None:
+        self.store._notifications[notification.id] = copy.deepcopy(notification)
+
+    def list_for_user(self, user_id: str) -> list[Notification]:
+        return sorted(
+            (copy.deepcopy(item) for item in self.store._notifications.values()
+             if item.user_id == user_id),
+            key=lambda item: (item.created_at, item.id),
+            reverse=True,
+        )
+
+    def delete_for_user(self, user_id: str) -> None:
+        self.store._notifications = {
+            item_id: item for item_id, item in self.store._notifications.items()
+            if item.user_id != user_id
+        }
+
 
 class MemoryStore:
     def __init__(self) -> None:
@@ -313,6 +365,7 @@ class MemoryStore:
         self._rankings: dict[tuple[str, datetime], RankingSnapshot] = {}
         self._sessions: dict[str, tuple[str, datetime]] = {}
         self._audit: list[AuditEvent] = []
+        self._notifications: dict[str, Notification] = {}
         self._lock = threading.RLock()
         self.users = MemoryUsers(self)
         self.profiles = MemoryProfiles(self)
@@ -323,6 +376,7 @@ class MemoryStore:
         self.competitions = MemoryCompetitions(self)
         self.trading = MemoryTrading(self)
         self.audit = MemoryAudit(self)
+        self.notifications = MemoryNotifications(self)
 
     @contextmanager
     def transaction(self):
@@ -330,7 +384,7 @@ class MemoryStore:
             names = (
                 "_users", "_users_by_identity", "_users_by_email", "_profiles",
                 "_leagues", "_memberships", "_invitations", "_sessions", "_audit",
-                "_competitions", "_trading", "_rankings",
+                "_competitions", "_trading", "_rankings", "_notifications",
             )
             state = copy.deepcopy({name: getattr(self, name) for name in names})
             try:

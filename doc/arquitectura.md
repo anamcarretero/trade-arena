@@ -152,6 +152,11 @@ de los participantes iniciales con el comienzo del calendario de competición,
 también cuando el administrador la inicia más tarde. Solo corrige filas con
 `joined_late=false`; una incorporación tardía conserva su instante real.
 
+`migrations/009_notifications_privacy.sql` indexa el centro privado de
+notificaciones por usuario/fecha y la auditoría exportable por actor. No altera
+ni destruye filas anteriores y puede aplicarse tanto sobre la 008 como al crear
+un esquema vacío.
+
 Al crear una liga Free se bloquea la fila del propietario antes de comprobar
 su límite, y el índice parcial mantiene una segunda defensa. Al invitar o
 aceptar se bloquea la liga antes de contar miembros e invitaciones pendientes,
@@ -285,6 +290,34 @@ Actions solo envían referencias y campos de orden. La PWA responsive ES/EN
 muestra cifras calculadas por Python; TypeScript solo sugiere la diferencia
 aritmética en el campo de comisión y no decide saldo, validez del total,
 posición, valoración ni rentabilidad.
+
+TA-036 activa `NotificationService` y el repositorio `notifications` con el
+mismo contrato en memoria y PostgreSQL. `GET /api/v1/notifications` lista solo
+las notificaciones de la sesión, nuevas primero, y
+`POST /api/v1/notifications/{id}/read` fija `read_at` una sola vez. Repetir la
+acción devuelve el mismo resultado sin duplicar auditoría; un identificador
+ajeno o inexistente responde `404`. Python elimina de los payloads cualquier
+clave asociada a tokens, secretos, contraseñas, credenciales, autorización o
+cookies antes de persistirla o exponerla.
+
+La exportación de `GET /api/v1/me` queda versionada como esquema 1, ordenada y
+sin una marca de generación variable: incluye cuenta y perfil propios,
+membresías e invitaciones recibidas, notificaciones, auditoría relacionada y
+cada cartera propia con competición, posiciones, órdenes, ejecuciones y ledger.
+Excluye sujetos de identidades externas, hashes de sesión, tokens, secretos, credenciales,
+rankings compartidos y datos financieros de otros participantes. La ruta BFF
+`/account/export` entrega exactamente ese JSON como descarga sin caché; no
+reconstruye reglas de privacidad en TypeScript.
+
+`DELETE /api/v1/me` exige `confirm_account_deletion=true` en el backend. En una
+única transacción marca la cuenta como eliminada, sustituye el email por un
+alias irreversible ligado al UUID, elimina identidades y perfil, anonimiza ese
+email en invitaciones, borra notificaciones, retira membresías activas y revoca
+todas las sesiones. Se conservan UUID internos, auditoría, participaciones,
+carteras, órdenes, ejecuciones y ledger para integridad financiera. Al no quedar
+sesión ni membresía activa, la cuenta eliminada no puede acceder a ligas,
+competiciones, carteras, órdenes, operaciones o notificaciones; las fronteras
+privadas mantienen `404` para recursos ajenos.
 
 ### Portabilidad operativa
 

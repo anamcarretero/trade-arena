@@ -11,7 +11,7 @@ from tradearena.adapters.postgres import PostgresStore
 from tradearena.adapters.market_data import FixtureMarketDataAdapter
 from tradearena.application.services import (
     AccountService, AuthService, CompetitionService, LeagueService,
-    SessionService, TradingService,
+    NotificationService, SessionService, TradingService,
 )
 from tradearena.presentation.api import Api
 from tradearena.presentation.asgi import create_app
@@ -44,5 +44,6 @@ def create():
         os.environ["BFF_SHARED_SECRET"],
         CompetitionService(store, ids),
         TradingService(store, ids, FixtureMarketDataAdapter()),
+        NotificationService(store, ids),
     )
     return create_app(dispatcher, store.ready)

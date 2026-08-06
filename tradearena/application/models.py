@@ -225,3 +225,13 @@ class AuditEvent:
     resource_type: str
     resource_id: str
     metadata: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class Notification:
+    id: str
+    user_id: str
+    kind: str
+    payload: dict[str, object]
+    created_at: datetime
+    read_at: datetime | None = None

@@ -40,12 +40,14 @@
    ranking reproducible e incorporación tardía con capital íntegro.
 6. Ampliación TA-035: cantidades fraccionadas, ejecuciones simuladas declaradas
    y correcciones compensatorias auditables.
+7. TA-036 centro privado de notificaciones con estados leído/no leído,
+   exportación completa de datos propios y borrado confirmado desde la PWA con
+   anonimización, revocación total de sesiones y conservación financiera.
 
 ## Siguiente — Fase 3
 
-1. TA-036 centro de notificaciones, exportación y borrado desde la PWA.
-2. TA-037 accesibilidad WCAG 2.2 AA y pruebas E2E de dos participantes.
-3. TA-038 staging reproducible: Vercel, Neon Frankfurt, Cloud Run Frankfurt,
+1. TA-037 accesibilidad WCAG 2.2 AA y pruebas E2E de dos participantes.
+2. TA-038 staging reproducible: Vercel, Neon Frankfurt, Cloud Run Frankfurt,
    Secret Manager y GitHub OIDC; ramas Neon efímeras para integración en PR.
 
 ## Fases 4–7

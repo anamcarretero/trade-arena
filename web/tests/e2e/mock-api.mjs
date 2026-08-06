@@ -14,10 +14,28 @@ const league = {
 };
 const competitions = [];
 const portfolios = new Map();
+const deletedSessions = new Set();
+const notifications = new Map([
+  ["owner-e2e", [{
+    id: "notification-owner", kind: "competition.started",
+    payload: {message: "Temporada preparada"},
+    created_at: "2026-08-06T12:00:00Z", read_at: null
+  }]],
+  ["member-e2e", [{
+    id: "notification-member", kind: "invitation.accepted",
+    payload: {message: "Invitation accepted"},
+    created_at: "2026-08-05T12:00:00Z", read_at: null
+  }]]
+]);
 
 function json(response, status, body) {
   response.writeHead(status, {"Content-Type": "application/json"});
   response.end(JSON.stringify(body));
+}
+
+function empty(response, status) {
+  response.writeHead(status);
+  response.end();
 }
 
 async function body(request) {
@@ -29,14 +47,49 @@ async function body(request) {
 createServer(async (request, response) => {
   const path = new URL(request.url, "http://127.0.0.1:18080").pathname;
   if (path === "/health/live") return json(response, 200, {status: "ok"});
-  if (request.headers.authorization !== "Bearer e2e-session") {
+  const token = request.headers.authorization?.replace("Bearer ", "");
+  const actorId = token === "e2e-session" ? "owner-e2e"
+    : token === "e2e-session-member" ? "member-e2e" : null;
+  if (!actorId || deletedSessions.has(token)) {
     return json(response, 403, {error: "forbidden"});
   }
   if (request.method === "GET" && path === "/api/v1/me") {
     return json(response, 200, {
-      user: {id: "owner-e2e", email: "owner@example.com"},
-      profile: {display_name: "Owner E2E", locale: "es", birth_date: "1990-01-01"}
+      schema_version: "1",
+      user: {
+        id: actorId,
+        email: actorId === "owner-e2e" ? "owner@example.com" : "member@example.com",
+        created_at: "2026-08-01T12:00:00Z"
+      },
+      profile: {
+        display_name: actorId === "owner-e2e" ? "Owner E2E" : "Member E2E",
+        locale: "es", birth_date: "1990-01-01"
+      },
+      memberships: [{league_id: "league-e2e", user_id: actorId}],
+      invitations: [], notifications: notifications.get(actorId), audit: [],
+      financial_history: [{
+        competition: {id: "competition-export"},
+        portfolio: {id: `portfolio-${actorId}`, user_id: actorId, ledger: []}
+      }]
     });
+  }
+  if (request.method === "DELETE" && path === "/api/v1/me") {
+    const input = await body(request);
+    if (input.confirm_account_deletion !== true) {
+      return json(response, 400, {error: "invalid_input"});
+    }
+    deletedSessions.add(token);
+    return empty(response, 204);
+  }
+  if (request.method === "GET" && path === "/api/v1/notifications") {
+    return json(response, 200, notifications.get(actorId));
+  }
+  const notificationRead = path.match(/^\/api\/v1\/notifications\/([^/]+)\/read$/);
+  if (request.method === "POST" && notificationRead) {
+    const item = notifications.get(actorId).find(row => row.id === notificationRead[1]);
+    if (!item) return json(response, 404, {error: "not_found"});
+    item.read_at ??= "2026-08-06T13:00:00Z";
+    return json(response, 200, item);
   }
   if (request.method === "GET" && path === `/api/v1/leagues/${league.id}`) {
     return json(response, 200, league);

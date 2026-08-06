@@ -1,9 +1,9 @@
 import {expect, test} from "@playwright/test";
 import {EncryptJWT} from "jose";
 
-async function sessionCookie() {
+async function sessionCookie(token = "e2e-session") {
   const key = Buffer.from("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "base64url");
-  return new EncryptJWT({token: "e2e-session"})
+  return new EncryptJWT({token})
     .setProtectedHeader({alg: "dir", enc: "A256GCM"})
     .setIssuedAt()
     .setExpirationTime("10m")
@@ -64,4 +64,54 @@ test("an owner creates and starts a competition with immutable ES/EN confirmatio
     () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
   );
   expect(noHorizontalScroll).toBe(true);
+});
+
+test("two participants use private notifications, export and confirmed deletion", async ({browser}) => {
+  const ownerContext = await browser.newContext();
+  await ownerContext.addCookies([{
+    name: "tradearena_session", value: await sessionCookie(),
+    domain: "localhost", path: "/", httpOnly: true, sameSite: "Lax"
+  }]);
+  const ownerPage = await ownerContext.newPage();
+  await ownerPage.goto("/es/app/notifications");
+  await expect(ownerPage.getByText("Temporada preparada")).toBeVisible();
+  await expect(ownerPage.getByText("No leída")).toBeVisible();
+  await ownerPage.getByRole("button", {name: "Marcar como leída"}).click();
+  await expect(ownerPage.getByText("Notificación marcada como leída.")).toBeVisible();
+  await expect(ownerPage.getByText("Leída", {exact: true})).toBeVisible();
+  await ownerPage.setViewportSize({width: 375, height: 812});
+  expect(await ownerPage.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+  )).toBe(true);
+
+  await ownerPage.goto("/en/app/account");
+  const downloadPromise = ownerPage.waitForEvent("download");
+  await ownerPage.getByRole("link", {name: "Download export"}).click();
+  const download = await downloadPromise;
+  const stream = await download.createReadStream();
+  let exported = "";
+  for await (const chunk of stream) exported += chunk.toString();
+  expect(exported).toContain("owner@example.com");
+  expect(exported).toContain("portfolio-owner-e2e");
+  expect(exported).not.toContain("member@example.com");
+  expect(exported).not.toContain("e2e-session");
+  expect(exported).not.toContain("secret");
+  await ownerContext.close();
+
+  const memberContext = await browser.newContext();
+  await memberContext.addCookies([{
+    name: "tradearena_session", value: await sessionCookie("e2e-session-member"),
+    domain: "localhost", path: "/", httpOnly: true, sameSite: "Lax"
+  }]);
+  const memberPage = await memberContext.newPage();
+  await memberPage.goto("/en/app/account");
+  const deleteButton = memberPage.getByRole("button", {name: "Permanently delete account"});
+  await deleteButton.click();
+  await expect(memberPage).toHaveURL(/\/en\/app\/account$/);
+  await memberPage.getByRole("checkbox").check();
+  await deleteButton.click();
+  await expect(memberPage).toHaveURL(/\/en\?account_deleted=1$/);
+  await memberPage.goto("/en/app/notifications");
+  await expect(memberPage).toHaveURL(/^https:\/\/test\.eu\.auth0\.com\/authorize/);
+  await memberContext.close();
 });

@@ -85,6 +85,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listOwnNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{notification_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["markOwnNotificationRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/profile": {
         parameters: {
             query?: never;
@@ -364,6 +396,39 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AccountExport: {
+            /** @constant */
+            schema_version: "1";
+            user: {
+                [key: string]: unknown;
+            };
+            profile: {
+                [key: string]: unknown;
+            } | null;
+            memberships: {
+                [key: string]: unknown;
+            }[];
+            invitations: {
+                [key: string]: unknown;
+            }[];
+            notifications: components["schemas"]["Notification"][];
+            financial_history: {
+                [key: string]: unknown;
+            }[];
+            audit: {
+                [key: string]: unknown;
+            }[];
+        };
+        Notification: {
+            id: string;
+            kind: string;
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            created_at: string;
+            read_at: string | null;
+        };
         /** @enum {string} */
         Role: "owner" | "admin" | "member";
         /** @enum {string} */
@@ -691,12 +756,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Datos propios exportables */
+            /** @description Exportación completa y reproducible de datos propios, sin sesiones ni credenciales */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccountExport"];
+                };
             };
             403: components["responses"]["Forbidden"];
         };
@@ -708,7 +775,14 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @constant */
+                    confirm_account_deletion: true;
+                };
+            };
+        };
         responses: {
             /** @description Cuenta eliminada */
             204: {
@@ -717,7 +791,64 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Falta confirmación explícita */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listOwnNotifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Notificaciones privadas de la sesión, nuevas primero */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notification"][];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    markOwnNotificationRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Notificación propia marcada como leída de forma idempotente */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notification"];
+                };
+            };
+            /** @description Notificación inexistente o ajena */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     updateOwnProfile: {

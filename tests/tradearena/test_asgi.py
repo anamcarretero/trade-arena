@@ -8,7 +8,7 @@ from tradearena.adapters.memory import MemoryStore
 from tradearena.adapters.market_data import FixtureMarketDataAdapter
 from tradearena.application.services import (
     AccountService, AuthService, CompetitionService, LeagueService,
-    SessionService, TradingService,
+    NotificationService, SessionService, TradingService,
 )
 from tradearena.ports.identity import IdentityAssertion
 from tradearena.presentation.api import Api
@@ -38,10 +38,15 @@ def build_client(readiness=lambda: True):
         NOW,
     )
     token = sessions.issue(owner.id, NOW)
+    notifications = NotificationService(store, ids)
+    notifications.create(
+        owner.id, "competition.started", {"message": "Season ready"}, NOW,
+    )
     dispatcher = Api(
         sessions, accounts, leagues, lambda: NOW,
         competitions=CompetitionService(store, ids),
         trading=TradingService(store, ids, FixtureMarketDataAdapter()),
+        notifications=notifications,
     )
     return TestClient(create_app(dispatcher, readiness)), token
 
@@ -326,6 +331,44 @@ def test_fastapi_routes_match_canonical_openapi_operation_ids():
     assert operations(generated) == operations(canonical)
 
 
+def test_notifications_are_private_readable_and_idempotent():
+    client, token = build_client()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    listed = client.get("/api/v1/notifications", headers=headers)
+    assert listed.status_code == 200
+    notification = listed.json()[0]
+    assert notification["read_at"] is None
+    first = client.post(
+        f"/api/v1/notifications/{notification['id']}/read", headers=headers,
+    )
+    second = client.post(
+        f"/api/v1/notifications/{notification['id']}/read", headers=headers,
+    )
+    assert first.status_code == second.status_code == 200
+    assert first.json()["read_at"] == second.json()["read_at"] == NOW.isoformat()
+    assert client.post(
+        "/api/v1/notifications/foreign/read", headers=headers,
+    ).status_code == 404
+
+
+def test_account_delete_requires_confirmation_and_revokes_session():
+    client, token = build_client()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    denied = client.request(
+        "DELETE", "/api/v1/me", headers=headers,
+        json={"confirm_account_deletion": False},
+    )
+    assert denied.status_code == 400
+    deleted = client.request(
+        "DELETE", "/api/v1/me", headers=headers,
+        json={"confirm_account_deletion": True},
+    )
+    assert deleted.status_code == 204
+    assert client.get("/api/v1/me", headers=headers).status_code == 403
+
+
 def test_auth0_exchange_is_bff_only_and_logout_revokes_server_session():
     store = MemoryStore()
     ids = Ids()
@@ -347,9 +390,13 @@ def test_auth0_exchange_is_bff_only_and_logout_revokes_server_session():
     )
     assert exchanged.status_code == 201
     assert exchanged.json()["session_token"] == "opaque-session"
-    assert client.get(
+    exported = client.get(
         "/api/v1/me", headers={"Authorization": "Bearer opaque-session"}
-    ).status_code == 200
+    )
+    assert exported.status_code == 200
+    assert exported.json()["schema_version"] == "1"
+    assert "identity_subject" not in exported.text
+    assert "opaque-session" not in exported.text
     assert client.post(
         "/api/v1/auth/logout", headers={"Authorization": "Bearer opaque-session"}
     ).status_code == 204

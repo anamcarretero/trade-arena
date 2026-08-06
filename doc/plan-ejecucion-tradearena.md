@@ -12,7 +12,8 @@ página pública de planes y TA-034 la creación e inicio de competiciones con
 `rules_snapshot` inmutable y TA-035 completa cartera, órdenes, ejecución con
 fixtures, historial, ranking e incorporación tardía, incluida su ampliación de
 cantidades fraccionadas, ejecuciones simuladas declaradas y correcciones
-compensatorias. La siguiente entrega es TA-036.
+compensatorias. TA-036 completa notificaciones, exportación y borrado desde la
+PWA. La siguiente entrega es TA-037.
 
 ```text
 Next.js PWA/BFF — Vercel
@@ -206,9 +207,10 @@ bancaria.
 
 ### Fase 3.5 — TA-036–TA-037: cierre funcional y accesibilidad de la PWA
 
-1. Incorporar el centro de notificaciones y los flujos de exportación y
-   borrado de cuenta ya soportados por la aplicación.
-2. Completar accesibilidad WCAG 2.2 AA y E2E de dos participantes sobre los
+1. TA-036, completado: incorporar el centro privado de notificaciones y los
+   flujos de exportación completa y borrado confirmado, con autorización,
+   anonimización, revocación de sesiones y conservación financiera en Python.
+2. TA-037: completar accesibilidad WCAG 2.2 AA y E2E de dos participantes sobre los
    recorridos críticos.
 
 **Salida:** la PWA cubre los flujos previstos para beta y supera la validación
@@ -312,7 +314,7 @@ Secuencia recomendada:
 4. TA-033, página pública de planes;
 5. TA-034–TA-035, competiciones, cartera y ranking;
 6. ampliación TA-035, fracciones y ejecuciones registradas manualmente;
-7. TA-036–TA-037, cierre funcional y accesibilidad de la PWA;
+7. TA-036 completado; TA-037, accesibilidad de la PWA;
 8. TA-038, infraestructura y staging;
 9. mercado y jobs;
 10. Stripe y preparación de beta.
@@ -320,8 +322,8 @@ Secuencia recomendada:
 Cada `/goal` debe expresar resultado, límites y verificación, y referenciar
 este documento en vez de copiar toda la especificación. TA-032 conserva los
 artefactos de instalación, el BFF y el sistema visual de TA-031. El siguiente
-objetivo es TA-036. No activa notificaciones, exportación, borrado desde
-la PWA, importación de brokers, Friends, Club ni facturación.
+objetivo es TA-037. TA-036 ya activa notificaciones, exportación y borrado desde
+la PWA. No activa importación de brokers, Friends, Club ni facturación.
 
 ## 6. Supuestos y puertas
 

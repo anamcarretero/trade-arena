@@ -14,13 +14,14 @@ añaden participante autenticado, propietario y administrador de liga. Sus
 recursos son privados y solo se exponen por `/api/v1` tras validar sesión y
 membresía activa.
 
-## 0. Flujos del producto nuevo hasta TA-035
+## 0. Flujos del producto nuevo hasta TA-036
 
 1. Identidad verifica un enlace de email de un solo uso o claims Google con
    emisor, audiencia y email verificado; después se emite una sesión propia.
-2. La persona mayor de edad completa nombre, idioma y consentimiento. Puede
-   exportar sus propios datos o borrar la cuenta; el borrado revoca sesiones y
-   anonimiza sin destruir la auditoría financiera.
+2. La persona mayor de edad completa nombre, idioma y consentimiento. Desde la
+   PWA puede exportar sus propios datos o borrar la cuenta; el borrado exige
+   confirmación, revoca todas las sesiones y anonimiza sin destruir la auditoría
+   financiera.
 3. Free permite crear una liga activa con capital virtual inicial fijo de
    3.000 USD por competición. El creador es propietario y puede invitar un
    segundo miembro. La aplicación genera un enlace para copiar y compartir;
@@ -181,6 +182,39 @@ TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
 
 TA-035 no incorpora notificaciones, exportación o borrado desde la PWA,
 facturación, Stripe, mercado licenciado, jobs programados ni staging.
+
+### Notificaciones, exportación y borrado de TA-036
+
+1. La persona abre «Notificaciones»/«Notifications» desde la PWA. FastAPI lista
+   únicamente sus filas, ordenadas de más reciente a más antigua, con estado
+   leído/no leído. No se expone `user_id` ni contenido sensible del payload.
+2. «Marcar como leída» vuelve a autenticar en el backend y fija `read_at` solo
+   si la notificación pertenece a la sesión. Repetir la petición devuelve la
+   misma fecha sin una segunda mutación. Una notificación ajena o inexistente
+   produce `404`.
+3. En «Cuenta y privacidad»/«Account and privacy», descargar la exportación
+   hace que el BFF solicite `GET /api/v1/me` con la sesión `HttpOnly` y entregue
+   un JSON de esquema 1 sin caché. Contiene solo cuenta, perfil, membresías,
+   invitaciones recibidas, notificaciones, auditoría relacionada y el historial
+   financiero completo de las carteras propias, incluido ledger. No contiene
+   el sujeto de la identidad externa, sesiones, tokens, secretos, credenciales, rankings
+   compartidos ni datos de otro participante.
+4. La exportación no incorpora una hora variable de generación y ordena sus
+   colecciones, por lo que el mismo estado produce el mismo documento.
+5. Para borrar, la persona debe activar una confirmación explícita. La Server
+   Action la transmite, pero Python vuelve a exigir el booleano verdadero; una
+   llamada manipulada sin confirmación se rechaza sin cambios.
+6. El borrado se ejecuta en una transacción: revoca todas las sesiones, elimina
+   identidades y perfil, anonimiza el email de cuenta e invitaciones, borra las
+   notificaciones privadas y retira membresías activas. Conserva UUID internos,
+   auditoría, participación, carteras, órdenes, ejecuciones y ledger.
+7. La cookie `HttpOnly` se elimina en el BFF tras el éxito. La cuenta borrada no
+   puede reutilizar ninguna sesión ni acceder a ligas, competiciones, carteras,
+   órdenes, operaciones o notificaciones. Los recursos privados ajenos siguen
+   respondiendo `404`.
+
+TA-036 no incorpora el trabajo general WCAG 2.2 AA de TA-037, infraestructura
+cloud, mercado licenciado, jobs, brokers, Friends, Club, Stripe ni facturación.
 
 Para ejecutar el backend contra PostgreSQL se aplican primero las migraciones
 con `DATABASE_URL=... python3 -m tradearena migrate` y se arranca después la API
