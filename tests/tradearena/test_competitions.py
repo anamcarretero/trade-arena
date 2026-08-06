@@ -34,6 +34,8 @@ def test_domain_snapshot_is_versioned_and_free_capital_is_fixed():
         == (NOW + timedelta(days=1)).isoformat()
     assert snapshot["rules"]["initial_capital"] == "3000.00"
     assert snapshot["rules"]["currency"] == "USD"
+    assert snapshot["rules"]["whole_shares_only"] is False
+    assert snapshot["rules"]["commissions"]["regular"] == "1.15"
 
 
 @pytest.fixture

@@ -31,10 +31,10 @@ def build_rules_snapshot(
         "rules": {
             "currency": "USD",
             "initial_capital": initial_capital,
-            "whole_shares_only": True,
+            "whole_shares_only": False,
             "short_selling": False,
             "margin": False,
             "partial_executions": False,
-            "commissions": {"regular": "0.99", "extended": "2.99"},
+            "commissions": {"regular": "1.15", "extended": "2.99"},
         },
     }

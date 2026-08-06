@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from enum import Enum
 from typing import Callable
+from zoneinfo import ZoneInfo
 
 from tradearena.application.services import (
     ApplicationError, Conflict, Forbidden, InvalidInput, NotFound,
@@ -34,6 +35,16 @@ def _json(value):
     if isinstance(value, (list, tuple)):
         return [_json(item) for item in value]
     return value
+
+
+def _reported_datetime(value: object, timezone_name: object) -> datetime:
+    name = str(timezone_name or "Europe/Madrid")
+    if name not in {"Europe/Madrid", "UTC"}:
+        raise InvalidInput("zona horaria no soportada")
+    result = datetime.fromisoformat(str(value))
+    if result.tzinfo is None:
+        result = result.replace(tzinfo=ZoneInfo(name))
+    return result
 
 
 class Api:
@@ -147,6 +158,44 @@ class Api:
                     str(body["limit_price"]) if body.get("limit_price") is not None else None,
                     now, str(body["client_order_id"])
                     if body.get("client_order_id") else None,
+                    str(body["commission"]).replace(",", ".")
+                    if body.get("commission") is not None else None,
+                )
+                return ApiResponse(201, _json(asdict(result)))
+            if len(route) == 7 and route[0] == "leagues" \
+                    and route[2] == "competitions" \
+                    and route[4] == "reported-trades" \
+                    and route[6] == "corrections" and method == "POST":
+                result = self.trading.correct_reported_trade(
+                    actor, route[1], route[3], route[5],
+                    occurred_at=_reported_datetime(
+                        body["date"], body.get("timezone", "Europe/Madrid")
+                    ),
+                    client_trade_id=str(body.get("client_trade_id", "")),
+                    now=now,
+                )
+                return ApiResponse(201, _json(asdict(result)))
+            if len(route) == 5 and route[0] == "leagues" \
+                    and route[2] == "competitions" \
+                    and route[4] == "reported-trades" and method == "POST":
+                result = self.trading.report_trade(
+                    actor, route[1], route[3],
+                    occurred_at=_reported_datetime(
+                        body["date"], body.get("timezone", "Europe/Madrid")
+                    ),
+                    symbol=str(body.get("ticker", "")),
+                    side=str(body.get("type", "")),
+                    quantity_value=str(body.get("quantity", "")),
+                    price_per_share=str(body.get("price_per_share", "")).replace(",", "."),
+                    total_amount=str(body.get("total_amount", "")).replace(",", "."),
+                    currency=str(body.get("currency", "")),
+                    fx_rate=str(body.get("fx_rate", "")),
+                    client_trade_id=str(body.get("client_trade_id", "")),
+                    now=now,
+                    commission_value=(
+                        str(body["commission"]).replace(",", ".")
+                        if body.get("commission") is not None else None
+                    ),
                 )
                 return ApiResponse(201, _json(asdict(result)))
             if len(route) == 6 and route[0] == "leagues" \

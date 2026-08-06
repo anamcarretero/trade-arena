@@ -25,7 +25,7 @@ def quote(value="100", *, session=Session.REGULAR, minute=1):
     return Quote("AAPL", Decimal(value), T0 + timedelta(minutes=minute), session)
 
 
-def test_regular_market_execution_is_complete_and_charges_099():
+def test_regular_market_execution_is_complete_and_charges_115():
     portfolio = Portfolio("p1", Decimal("1000"))
     engine = TradingEngine()
     engine.submit(portfolio, order())
@@ -33,8 +33,8 @@ def test_regular_market_execution_is_complete_and_charges_099():
 
     assert len(executions) == 1
     assert executions[0].quantity == 2
-    assert executions[0].commission == Decimal("0.99")
-    assert portfolio.cash == Decimal("799.01")
+    assert executions[0].commission == Decimal("1.15")
+    assert portfolio.cash == Decimal("798.85")
     assert portfolio.positions == {"AAPL": 2}
     assert portfolio.orders["o1"].status is OrderStatus.FILLED
     assert all(sum((p.amount for p in entry.postings), Decimal("0")) == 0
@@ -56,6 +56,21 @@ def test_extended_execution_costs_299_when_enabled():
     execution, = engine.process_quote(portfolio, quote(session=Session.EXTENDED))
     assert execution.commission == Decimal("2.99")
     assert portfolio.cash == Decimal("797.01")
+
+
+def test_order_uses_user_commission_instead_of_snapshot_default():
+    portfolio = Portfolio("p1", Decimal("1000"))
+    engine = TradingEngine()
+    custom = order()
+    custom = Order(
+        custom.id, custom.symbol, custom.side, custom.quantity,
+        custom.order_type, custom.allow_extended_hours, custom.submitted_at,
+        commission=Decimal("0.75"),
+    )
+    engine.submit(portfolio, custom)
+    execution, = engine.process_quote(portfolio, quote())
+    assert execution.commission == Decimal("0.75")
+    assert portfolio.cash == Decimal("799.25")
 
 
 @pytest.mark.parametrize(
@@ -122,7 +137,7 @@ def test_same_inputs_produce_identical_portfolio_and_ranking_snapshots():
     ranking_a = build_ranking("c1", first.as_of, [("u1", first, False)])
     ranking_b = build_ranking("c1", second.as_of, [("u1", second, False)])
     assert ranking_a == ranking_b
-    assert first.cumulative_return == Decimal("0.019010000000")
+    assert first.cumulative_return == Decimal("0.018850000000")
 
 
 def test_float_money_is_rejected_to_avoid_platform_rounding():
@@ -130,8 +145,21 @@ def test_float_money_is_rejected_to_avoid_platform_rounding():
         Portfolio("p1", 1000.0)
 
 
-def test_fractional_shares_are_rejected_by_the_domain():
-    with pytest.raises(ValueError, match="entero positivo"):
+def test_fractional_shares_up_to_eight_decimals_execute_completely():
+    portfolio = Portfolio("p1", Decimal("1000"))
+    engine = TradingEngine()
+    engine.submit(portfolio, order(quantity=Decimal("0.12345678")))
+    execution, = engine.process_quote(portfolio, quote("100"))
+
+    assert execution.quantity == Decimal("0.12345678")
+    assert portfolio.positions["AAPL"] == Decimal("0.12345678")
+    assert portfolio.cash == Decimal("986.50")
+
+
+def test_fractional_shares_reject_more_than_eight_decimals_and_float_input():
+    with pytest.raises(ValueError, match="ocho decimales"):
+        order(quantity=Decimal("0.123456789"))
+    with pytest.raises(TypeError, match="float"):
         order(quantity=1.5)
 
 

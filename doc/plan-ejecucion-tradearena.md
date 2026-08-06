@@ -10,9 +10,9 @@ terminado. TA-031 completa acceso, perfil y PWA; TA-032 añade creación de liga
 invitaciones mediante enlace y administración de miembros; TA-033 incorpora la
 página pública de planes y TA-034 la creación e inicio de competiciones con
 `rules_snapshot` inmutable y TA-035 completa cartera, órdenes, ejecución con
-fixtures, historial, ranking e incorporación tardía. La siguiente entrega es
-una ampliación de TA-035 para cantidades fraccionadas y registro manual de
-ejecuciones simuladas; TA-036–TA-037 comienza después.
+fixtures, historial, ranking e incorporación tardía, incluida su ampliación de
+cantidades fraccionadas, ejecuciones simuladas declaradas y correcciones
+compensatorias. La siguiente entrega es TA-036.
 
 ```text
 Next.js PWA/BFF — Vercel
@@ -155,6 +155,9 @@ deterministas y obtienen el mismo ranking reproducible.
 
 ### Ampliación TA-035 — fracciones y ejecuciones registradas manualmente
 
+**Estado:** completada con las migraciones 006, 007 y 008, API/BFF/PWA bilingüe y pruebas
+reproducibles en memoria y PostgreSQL 16.
+
 1. Sustituir cantidades enteras por cantidades decimales positivas de hasta
    ocho decimales en dominio, aplicación, puertos, MemoryStore, PostgresStore,
    migraciones, API/OpenAPI y cliente generado. Mantener prohibidos corto,
@@ -169,10 +172,12 @@ deterministas y obtienen el mismo ranking reproducible.
    dentro del calendario inmutable y no precede a la incorporación del
    participante; y que los registros se introducen cronológicamente respecto
    al último evento de la cartera.
-4. En v1 exigir `Currency = USD` y `FX Rate = 1`. Normalizar importes con
-   `Decimal` y comprobar que `Total Amount` coincide al céntimo con cantidad por
-   precio y una de las comisiones del snapshot: suma para compra y resta para
-   venta. Rechazar sin mutaciones si falta saldo, posición o coherencia.
+4. En v1 exigir `Currency = USD` y `FX Rate = 1`. Admitir una comisión opcional
+   tanto en órdenes como en operaciones declaradas. Una orden sin comisión usa
+   al ejecutarse el respaldo del snapshot. En una declaración sin comisión,
+   inferirla del bruto y `Total Amount`; si se proporciona, comprobar al céntimo
+   la suma para compra o resta para venta. Rechazar sin mutaciones si falta
+   saldo, posición o coherencia.
 5. Crear atómicamente una orden ya ejecutada, una ejecución completa con
    `source=reported`, apuntes balanceados de ledger y auditoría. Una repetición
    con la misma clave por cartera devuelve el mismo resultado sin duplicar
@@ -181,8 +186,9 @@ deterministas y obtienen el mismo ranking reproducible.
    corrección posterior usa un evento compensatorio explícito y auditable.
 7. Añadir a la PWA un formulario responsive ES/EN y distinguir en cartera e
    historial las ejecuciones `fixture` y `reported`. TypeScript solo recoge y
-   presenta datos; saldo, posición, comisión, redondeo y rentabilidad continúan
-   en Python.
+   presenta datos y puede sugerir la diferencia aritmética en el campo de
+   comisión; saldo, posición, validación financiera, redondeo y rentabilidad
+   continúan en Python.
 8. Añadir pruebas de dominio y aplicación, contrato MemoryStore/PostgresStore,
    migración desde `005_trading_ranking`, autorización `404`, precisión de
    fracciones, redondeos, orden temporal, saldo/posición, ledger, idempotencia,
@@ -314,17 +320,8 @@ Secuencia recomendada:
 Cada `/goal` debe expresar resultado, límites y verificación, y referenciar
 este documento en vez de copiar toda la especificación. TA-032 conserva los
 artefactos de instalación, el BFF y el sistema visual de TA-031. El siguiente
-objetivo es la ampliación TA-035 de cantidades fraccionadas y ejecuciones
-registradas manualmente. No activa notificaciones, exportación, borrado desde
+objetivo es TA-036. No activa notificaciones, exportación, borrado desde
 la PWA, importación de brokers, Friends, Club ni facturación.
-
-```text
-/goal Amplía TA-035 conforme a doc/plan-ejecucion-tradearena.md: cantidades de
-acciones enteras o fraccionadas y registro manual de ejecuciones simuladas con
-ledger, idempotencia, historial y ranking reproducibles. Conserva reglas en
-Python, autorización 404, sesiones HttpOnly y USD/FX 1, sin importar datos de
-brokers, notificaciones, borrado, facturación ni Stripe.
-```
 
 ## 6. Supuestos y puertas
 

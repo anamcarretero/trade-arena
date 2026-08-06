@@ -21,9 +21,10 @@ from tradearena.ports.store import StoreConflict
 from tradearena.domain.competition import build_rules_snapshot
 from tradearena.domain.ranking import build_ranking
 from tradearena.domain.trading import (
-    Order, OrderSide, OrderStatus, OrderType, Portfolio, TradingEngine,
+    ExecutionSource, Order, OrderSide, OrderStatus, OrderType, Portfolio,
+    Session, TradingEngine,
 )
-from tradearena.domain.money import money, price
+from tradearena.domain.money import decimal, money, price, quantity
 
 
 class ApplicationError(Exception):
@@ -551,7 +552,8 @@ class CompetitionService:
             ))
             for membership in uow.memberships.list_active_for_league(league_id):
                 uow.trading.add(TradingAccount(
-                    competition.id, membership.user_id, now, False,
+                    competition.id, membership.user_id,
+                    competition.starts_at, False,
                     Portfolio(self._id(), initial_cash),
                 ))
             uow.audit.add(
@@ -606,9 +608,10 @@ class TradingService:
 
     def submit_order(
         self, actor_id: str, league_id: str, competition_id: str,
-        symbol: str, side: str, quantity: int, order_type: str,
+        symbol: str, side: str, quantity_value: str, order_type: str,
         allow_extended_hours: bool, limit_price: str | None, now: datetime,
         client_order_id: str | None = None,
+        commission_value: str | None = None,
     ) -> PortfolioView:
         with self.store.transaction() as uow:
             competition, account = self._account(
@@ -620,32 +623,186 @@ class TradingService:
                 if client_order_id else self._id()
             )
             existing = account.portfolio.orders.get(order_id)
+            normalized_quantity = quantity(quantity_value)
+            normalized_commission = (
+                money(commission_value) if commission_value is not None else None
+            )
             if existing:
                 expected = (
                     existing.symbol, existing.side.value, existing.quantity,
                     existing.order_type.value, existing.allow_extended_hours,
                     str(existing.limit_price) if existing.limit_price is not None else None,
+                    existing.commission,
                 )
                 requested = (
-                    symbol.strip().upper(), side, quantity, order_type,
+                    symbol.strip().upper(), side, normalized_quantity, order_type,
                     allow_extended_hours,
                     str(price(limit_price)) if limit_price is not None else None,
+                    normalized_commission,
                 )
                 if expected != requested:
                     raise Conflict("la clave idempotente ya pertenece a otra orden")
             else:
                 order = Order(
-                    order_id, symbol.strip(), OrderSide(side), quantity,
+                    order_id, symbol.strip(), OrderSide(side), normalized_quantity,
                     OrderType(order_type), allow_extended_hours, now,
                     price(limit_price) if limit_price is not None else None,
+                    commission=normalized_commission,
                 )
                 self._engine(competition).submit(account.portfolio, order)
                 uow.audit.add(
                     now, actor_id, "order.submitted", "order", order.id,
-                    {"competition_id": competition.id},
+                    {"competition_id": competition.id,
+                     "commission": (str(normalized_commission)
+                                    if normalized_commission is not None else None)},
                 )
             self._process_available_quotes(account, competition, now)
             uow.trading.save(account)
+            return self._portfolio_view(account, competition, now)
+
+    def report_trade(
+        self, actor_id: str, league_id: str, competition_id: str, *,
+        occurred_at: datetime, symbol: str, side: str, quantity_value: str,
+        price_per_share: str, total_amount: str, currency: str, fx_rate: str,
+        client_trade_id: str, now: datetime, commission_value: str | None = None,
+    ) -> PortfolioView:
+        with self.store.transaction() as uow:
+            competition, account = self._account(
+                uow, actor_id, league_id, competition_id, now,
+                for_update=True,
+            )
+            order_id = f"{account.portfolio.id}-reported-{client_trade_id}"
+            normalized_symbol = symbol.strip().upper()
+            normalized_quantity = quantity(quantity_value)
+            normalized_price = price(price_per_share)
+            normalized_total = money(total_amount)
+            normalized_commission = (
+                money(commission_value) if commission_value is not None else None
+            )
+            normalized_currency = currency.strip().upper()
+            normalized_fx = decimal(fx_rate)
+            requested_side = OrderSide(side)
+            gross = money(normalized_price * normalized_quantity)
+            inferred_commission = money(
+                normalized_total - gross
+                if requested_side is OrderSide.BUY
+                else gross - normalized_total
+            )
+            if inferred_commission < 0:
+                raise InvalidInput(
+                    "el total no permite calcular una comisión válida"
+                )
+            if normalized_commission is not None and normalized_commission < 0:
+                raise InvalidInput("la comisión no puede ser negativa")
+            commission = normalized_commission
+            if commission is None:
+                commission = inferred_commission
+            elif commission != inferred_commission:
+                raise InvalidInput(
+                    "el total no coincide al céntimo con precio, cantidad y comisión"
+                )
+            existing_order = account.portfolio.orders.get(order_id)
+            if existing_order:
+                existing_execution = next(
+                    (item for item in account.portfolio.executions
+                     if item.order_id == order_id), None
+                )
+                if existing_execution is None or (
+                    existing_order.symbol, existing_order.side,
+                    existing_order.quantity, existing_execution.price,
+                    existing_execution.total_amount, existing_execution.currency,
+                    existing_execution.fx_rate, existing_execution.executed_at,
+                    existing_order.commission,
+                ) != (
+                    normalized_symbol, requested_side, normalized_quantity,
+                    normalized_price, normalized_total, normalized_currency,
+                    normalized_fx, occurred_at,
+                    commission,
+                ):
+                    raise Conflict(
+                        "la clave idempotente ya pertenece a otra operación"
+                    )
+                return self._portfolio_view(account, competition, now)
+
+            self._validate_reported_date(competition, account, occurred_at, now)
+            if normalized_currency != "USD" or normalized_fx != Decimal("1"):
+                raise InvalidInput("v1 solo admite USD con FX Rate 1")
+            session = Session.REGULAR
+            order = Order(
+                order_id, normalized_symbol, requested_side, normalized_quantity,
+                OrderType.MARKET, session is Session.EXTENDED, occurred_at,
+                commission=commission,
+            )
+            try:
+                self._engine(competition).record_reported(
+                    account.portfolio, order, execution_price=normalized_price,
+                    commission=commission, total_amount=normalized_total,
+                    executed_at=occurred_at, session=session,
+                    currency=normalized_currency, fx_rate=normalized_fx,
+                )
+            except ValueError as exc:
+                if str(exc) in {"saldo insuficiente", "posición insuficiente"}:
+                    raise Conflict(str(exc)) from exc
+                raise InvalidInput(str(exc)) from exc
+            uow.trading.save(account)
+            uow.audit.add(
+                now, actor_id, "reported_trade.created", "order", order.id,
+                {"competition_id": competition.id, "source": "reported",
+                 "executed_at": occurred_at.isoformat(),
+                 "commission": str(commission)},
+            )
+            return self._portfolio_view(account, competition, now)
+
+    def correct_reported_trade(
+        self, actor_id: str, league_id: str, competition_id: str,
+        execution_id: str, *, occurred_at: datetime, client_trade_id: str,
+        now: datetime,
+    ) -> PortfolioView:
+        with self.store.transaction() as uow:
+            competition, account = self._account(
+                uow, actor_id, league_id, competition_id, now, for_update=True,
+            )
+            original = next(
+                (item for item in account.portfolio.executions
+                 if item.id == execution_id), None
+            )
+            if original is None or original.source is not ExecutionSource.REPORTED \
+                    or original.correction_of is not None:
+                raise NotFound("operación no encontrada")
+            order_id = f"{account.portfolio.id}-correction-{client_trade_id}"
+            existing = account.portfolio.orders.get(order_id)
+            if existing:
+                correction = next(
+                    (item for item in account.portfolio.executions
+                     if item.order_id == order_id), None
+                )
+                if correction is None or correction.correction_of != original.id \
+                        or correction.executed_at != occurred_at:
+                    raise Conflict(
+                        "la clave idempotente ya pertenece a otra corrección"
+                    )
+                return self._portfolio_view(account, competition, now)
+            self._validate_reported_date(competition, account, occurred_at, now)
+            opposite = (
+                OrderSide.SELL if original.side is OrderSide.BUY else OrderSide.BUY
+            )
+            order = Order(
+                order_id, original.symbol, opposite, original.quantity,
+                OrderType.MARKET, original.session is Session.EXTENDED,
+                occurred_at, commission=original.commission,
+            )
+            try:
+                self._engine(competition).correct_reported(
+                    account.portfolio, original, order, corrected_at=occurred_at,
+                )
+            except ValueError as exc:
+                raise Conflict(str(exc)) from exc
+            uow.trading.save(account)
+            uow.audit.add(
+                now, actor_id, "reported_trade.corrected", "execution", original.id,
+                {"competition_id": competition.id,
+                 "compensating_order_id": order.id},
+            )
             return self._portfolio_view(account, competition, now)
 
     def cancel_order(
@@ -731,6 +888,31 @@ class TradingService:
             raise Conflict("la competición no admite órdenes en este momento")
 
     @staticmethod
+    def _validate_reported_date(
+        competition: Competition, account: TradingAccount, occurred_at: datetime,
+        now: datetime,
+    ) -> None:
+        if occurred_at.tzinfo is None:
+            raise InvalidInput("la fecha necesita zona horaria")
+        calendar = competition.rules_snapshot["calendar"]
+        starts_at = datetime.fromisoformat(str(calendar["starts_at"]))
+        ends_at = datetime.fromisoformat(str(calendar["ends_at"]))
+        if competition.status is not CompetitionStatus.ACTIVE:
+            raise Conflict("la competición no admite operaciones declaradas")
+        if occurred_at > now:
+            raise Conflict("la fecha de la operación no puede ser futura")
+        if occurred_at < starts_at or occurred_at > ends_at:
+            raise Conflict("la fecha queda fuera del calendario fijado")
+        if occurred_at < account.joined_at:
+            raise Conflict("la fecha precede a la incorporación del participante")
+        latest = max(
+            (item.executed_at for item in account.portfolio.executions),
+            default=None,
+        )
+        if latest is not None and occurred_at < latest:
+            raise Conflict("las operaciones deben registrarse cronológicamente")
+
+    @staticmethod
     def _engine(competition: Competition) -> TradingEngine:
         commissions = competition.rules_snapshot["rules"]["commissions"]
         return TradingEngine(
@@ -804,20 +986,23 @@ class TradingService:
         prices = self._valuation_prices(account, competition, now)
         portfolio = account.portfolio
         positions = tuple(PositionView(
-            symbol, quantity,
+            symbol, str(quantity),
             str(prices[symbol]) if symbol in prices else None,
             str(money(prices[symbol] * quantity)) if symbol in prices else None,
         ) for symbol, quantity in sorted(portfolio.positions.items()))
         orders = tuple(OrderView(
-            item.id, item.symbol, item.side.value, item.quantity,
+            item.id, item.symbol, item.side.value, str(item.quantity),
             item.order_type.value, item.allow_extended_hours,
             str(item.limit_price) if item.limit_price is not None else None,
             item.status.value, item.rejection_reason, item.submitted_at,
+            str(item.commission) if item.commission is not None else None,
         ) for item in sorted(portfolio.orders.values(), key=lambda item: (item.submitted_at, item.id)))
         executions = tuple(ExecutionView(
-            item.id, item.order_id, item.symbol, item.side.value, item.quantity,
+            item.id, item.order_id, item.symbol, item.side.value, str(item.quantity),
             str(item.price), str(item.commission), item.session.value,
-            item.executed_at,
+            item.executed_at, item.source.value,
+            str(item.total_amount) if item.total_amount is not None else None,
+            item.currency, str(item.fx_rate), item.correction_of,
         ) for item in sorted(portfolio.executions, key=lambda item: (item.executed_at, item.id)))
         return PortfolioView(
             portfolio.id, competition.id, account.user_id, "USD",

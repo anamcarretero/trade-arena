@@ -14,7 +14,7 @@ function localeFrom(formData: FormData): Locale {
 
 function reference(formData: FormData, name: string) {
   const value = String(formData.get(name) ?? "");
-  if (!/^[A-Za-z0-9-]{1,128}$/.test(value)) throw new Error("Invalid reference");
+  if (!/^[A-Za-z0-9:-]{1,256}$/.test(value)) throw new Error("Invalid reference");
   return value;
 }
 
@@ -158,12 +158,14 @@ export async function submitOrder(formData: FormData) {
   const symbol = String(formData.get("symbol") ?? "").trim().toUpperCase();
   const side = String(formData.get("side") ?? "");
   const orderType = String(formData.get("order_type") ?? "");
-  const quantity = Number(formData.get("quantity"));
+  const quantity = String(formData.get("quantity") ?? "").trim();
   const rawLimit = String(formData.get("limit_price") ?? "").trim();
+  const commission = String(formData.get("commission") ?? "").trim();
   if (!/^[A-Z][A-Z0-9.-]{0,15}$/.test(symbol) ||
       !["buy", "sell"].includes(side) ||
       !["market", "limit"].includes(orderType) ||
-      !Number.isSafeInteger(quantity) || quantity <= 0) {
+      !/^\d+(?:\.\d{1,8})?$/.test(quantity) ||
+      (commission !== "" && !/^\d+(?:[.,]\d{1,2})?$/.test(commission))) {
     redirect(`${destination}?error=order`);
   }
   const response = await apiFetch(
@@ -174,6 +176,7 @@ export async function submitOrder(formData: FormData) {
         symbol, side, quantity, order_type: orderType,
         allow_extended_hours: formData.get("allow_extended_hours") === "on",
         limit_price: orderType === "limit" ? rawLimit : null,
+        commission: commission || null,
         client_order_id: crypto.randomUUID()
       })
     }
@@ -183,6 +186,71 @@ export async function submitOrder(formData: FormData) {
   if (!response.ok) redirect(`${destination}?error=order`);
   revalidatePath(destination);
   redirect(`${destination}?status=order-submitted`);
+}
+
+export async function reportTrade(formData: FormData) {
+  const locale = localeFrom(formData);
+  const leagueId = reference(formData, "league_id");
+  const competitionId = reference(formData, "competition_id");
+  const destination = leaguePath(locale, leagueId);
+  const date = String(formData.get("date") ?? "");
+  const timezone = String(formData.get("timezone") ?? "Europe/Madrid");
+  const ticker = String(formData.get("ticker") ?? "").trim().toUpperCase();
+  const type = String(formData.get("type") ?? "");
+  const quantity = String(formData.get("quantity") ?? "").trim();
+  const pricePerShare = String(formData.get("price_per_share") ?? "").trim();
+  const totalAmount = String(formData.get("total_amount") ?? "").trim();
+  const commission = String(formData.get("commission") ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(date) ||
+      !["Europe/Madrid", "UTC"].includes(timezone) ||
+      !/^[A-Z][A-Z0-9.-]{0,15}$/.test(ticker) ||
+      !["buy", "sell"].includes(type) ||
+      !/^\d+(?:\.\d{1,8})?$/.test(quantity) ||
+      !/^\d+(?:[.,]\d{1,4})?$/.test(pricePerShare) ||
+      !/^\d+(?:[.,]\d{1,2})?$/.test(totalAmount) ||
+      (commission !== "" && !/^\d+(?:[.,]\d{1,2})?$/.test(commission))) {
+    redirect(`${destination}?error=reported-trade`);
+  }
+  const response = await apiFetch(
+    `/api/v1/leagues/${leagueId}/competitions/${competitionId}/reported-trades`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        date: `${date}:00`, timezone, ticker, type, quantity,
+        price_per_share: pricePerShare, total_amount: totalAmount,
+        commission: commission || null,
+        currency: "USD", fx_rate: "1",
+        client_trade_id: crypto.randomUUID()
+      })
+    }
+  );
+  if (response.status === 403) signIn(locale, destination);
+  if (response.status === 404) redirect(`${destination}?error=access`);
+  if (!response.ok) redirect(`${destination}?error=reported-trade`);
+  revalidatePath(destination);
+  redirect(`${destination}?status=reported-trade-created`);
+}
+
+export async function correctReportedTrade(formData: FormData) {
+  const locale = localeFrom(formData);
+  const leagueId = reference(formData, "league_id");
+  const competitionId = reference(formData, "competition_id");
+  const executionId = reference(formData, "execution_id");
+  const destination = leaguePath(locale, leagueId);
+  const response = await apiFetch(
+    `/api/v1/leagues/${leagueId}/competitions/${competitionId}/reported-trades/${executionId}/corrections`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        date: new Date().toISOString(), client_trade_id: crypto.randomUUID()
+      })
+    }
+  );
+  if (response.status === 403) signIn(locale, destination);
+  if (response.status === 404) redirect(`${destination}?error=access`);
+  if (!response.ok) redirect(`${destination}?error=reported-trade`);
+  revalidatePath(destination);
+  redirect(`${destination}?status=reported-trade-corrected`);
 }
 
 export async function cancelOrder(formData: FormData) {

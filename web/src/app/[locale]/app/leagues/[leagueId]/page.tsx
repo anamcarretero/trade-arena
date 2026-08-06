@@ -53,7 +53,7 @@ export default async function LeaguePage({params, searchParams}: {
       {state.error === "access" ? text.leagueAccessError : state.error === "league-full" ? text.leagueFullError : text.leagueActionError}
     </p>}
     {state.status && <p className="success arena-message" role="status">
-      {state.status === "invited" ? text.invitedStatus : state.status === "revoked" ? text.revokedStatus : state.status === "removed" ? text.removedStatus : state.status === "competition-created" ? text.competitionCreatedStatus : state.status === "competition-started" ? text.competitionStartedStatus : state.status === "order-cancelled" ? text.orderCancelledStatus : text.orderSubmittedStatus}
+      {state.status === "invited" ? text.invitedStatus : state.status === "revoked" ? text.revokedStatus : state.status === "removed" ? text.removedStatus : state.status === "competition-created" ? text.competitionCreatedStatus : state.status === "competition-started" ? text.competitionStartedStatus : state.status === "order-cancelled" ? text.orderCancelledStatus : state.status === "reported-trade-created" ? text.reportedTradeCreatedStatus : state.status === "reported-trade-corrected" ? text.reportedTradeCorrectedStatus : text.orderSubmittedStatus}
     </p>}
 
     <section className="arena-section">

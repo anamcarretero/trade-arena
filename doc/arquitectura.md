@@ -136,6 +136,22 @@ idempotentes opacos. `MemoryStore` y `PostgresStore` reconstruyen el mismo
 agregado Python de cartera —órdenes, ejecuciones y ledger incluidos— y pasan el
 mismo contrato de aplicación.
 
+`migrations/006_fractional_reported_trades.sql` amplía cantidades de órdenes,
+ejecuciones y posiciones a `numeric(28,8)` y añade a cada ejecución su origen,
+importe total declarado, moneda, FX y referencia de compensación. Los datos de
+TA-035 existentes se migran como `source=fixture`; el ledger PostgreSQL pasa a
+ser estrictamente aditivo y verifica que un asiento ya persistido no cambie.
+
+`migrations/007_user_commissions.sql` añade a cada orden una comisión opcional
+no negativa. Conserva los datos existentes: las órdenes anteriores quedan sin
+valor explícito y, si aún están pendientes, usan al ejecutarse el respaldo del
+`rules_snapshot` que ya tenían asignado.
+
+`migrations/008_initial_participant_calendar_join.sql` alinea la incorporación
+de los participantes iniciales con el comienzo del calendario de competición,
+también cuando el administrador la inicia más tarde. Solo corrige filas con
+`joined_late=false`; una incorporación tardía conserva su instante real.
+
 Al crear una liga Free se bloquea la fila del propietario antes de comprobar
 su límite, y el índice parcial mantiene una segunda defensa. Al invitar o
 aceptar se bloquea la liga antes de contar miembros e invitaciones pendientes,
@@ -216,16 +232,21 @@ permanece cifrada en la cookie `HttpOnly` del BFF.
 
 TA-035 materializa como participantes a todos los miembros activos al iniciar
 y crea para cada uno una cartera con el capital de `rules_snapshot`; en Free
-son exactamente `3000.00 USD`. Aceptar una invitación después del inicio crea
+son exactamente `3000.00 USD`. Su incorporación se fija en el inicio del
+calendario, por lo que pueden declarar operaciones realizadas desde ese
+instante aunque la competición se activase después. Aceptar una invitación después del inicio crea
 la cartera en la misma transacción con el capital íntegro y `joined_late=true`.
 La expulsión corta el acceso, pero conserva el historial financiero.
 
 `TradingService` es la única frontera de decisiones de cartera. Lee calendario,
-capital y comisiones exclusivamente del snapshot inmutable, entrega el agregado
-al motor Python y persiste el resultado. Acepta acciones enteras, compra/venta,
+capital y las comisiones de respaldo del snapshot inmutable, entrega el agregado
+al motor Python y persiste el resultado. Acepta cantidades decimales positivas
+de acciones con hasta ocho decimales, compra/venta,
 mercado/límite y sesión regular o ampliada; nunca ejecuta una cotización anterior
 a la orden, no divide ejecuciones y rechaza sin comisión la falta de efectivo o
-posición. Las órdenes permanecen GTC hasta ejecución, cancelación, fin del
+posición. Cada orden puede fijar una comisión no negativa; si se omite, el
+motor aplica al ejecutarla la comisión regular o ampliada del snapshot. Las
+órdenes permanecen GTC hasta ejecución, cancelación, fin del
 calendario fijado o suspensión definitiva indicada por el puerto de mercado.
 
 Durante TA-035 `FixtureMarketDataAdapter` proporciona precios deterministas en
@@ -235,12 +256,35 @@ un precio enviado por el navegador. La valoración genera snapshots de cartera
 y ranking porcentual con hash estable, desempate por usuario y marca visible de
 incorporación tardía.
 
+La ampliación de TA-035 añade `.../reported-trades` como caso de uso separado:
+registra una ejecución simulada ya realizada, no una orden pendiente. Recibe
+fecha, ticker, tipo, cantidad, precio por acción, total, moneda, FX y clave
+idempotente. Python valida que la competición siga activa, el timestamp esté
+dentro del calendario de `rules_snapshot`, no sea futuro ni anterior a la
+incorporación y mantenga la cronología de la cartera. V1 exige USD/FX 1. La
+comisión es opcional: si se omite, Python la infiere del bruto y el total; si
+se proporciona, exige que coincida al céntimo con ambos.
+La API interpreta fechas sin offset mediante la zona elegida (`Europe/Madrid`
+por defecto o `UTC`) y normaliza coma o punto decimal en precio, importe y
+comisión. El cálculo visual del formulario es solo una ayuda: el backend
+recalcula y valida siempre el resultado antes de alterar la cartera.
+
+Una declaración válida crea atómicamente orden `filled`, ejecución completa
+`source=reported`, ledger balanceado y auditoría. Las ejecuciones del motor se
+conservan como `source=fixture`. La clave se acota a la cartera y una repetición
+idéntica no duplica historia. `.../reported-trades/{execution_id}/corrections`
+revierte el efecto mediante otra ejecución y asiento compensatorios con
+referencia al original; nunca actualiza ni borra la ejecución financiera.
+Saldo y posición siguen impidiendo margen y corto también durante la
+compensación.
+
 La API añade `.../portfolio`, `.../orders`, cancelación por id y `.../ranking`.
 Todos vuelven a comprobar liga, competición, cartera y orden; un recurso ajeno
 responde `404`. El BFF conserva la sesión cifrada `HttpOnly`, y las Server
 Actions solo envían referencias y campos de orden. La PWA responsive ES/EN
-muestra cifras calculadas por Python; TypeScript no contiene reglas de
-comisiones, saldo, valoración ni rentabilidad.
+muestra cifras calculadas por Python; TypeScript solo sugiere la diferencia
+aritmética en el campo de comisión y no decide saldo, validez del total,
+posición, valoración ni rentabilidad.
 
 ### Portabilidad operativa
 

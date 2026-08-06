@@ -166,6 +166,145 @@ def test_fastapi_exposes_portfolio_orders_history_and_ranking():
     assert ranking.json()["rows"][0]["cumulative_return"] == "0E-12"
 
 
+def test_fastapi_reports_fractional_trades_and_compensating_corrections():
+    client, token = build_client()
+    headers = {"Authorization": f"Bearer {token}"}
+    league_id = client.post(
+        "/api/v1/leagues", headers=headers, json={"name": "Reported"}
+    ).json()["id"]
+    competition = client.post(
+        f"/api/v1/leagues/{league_id}/competitions", headers=headers,
+        json={
+            "name": "Actual", "starts_at": NOW.isoformat(),
+            "ends_at": (NOW + timedelta(days=7)).isoformat(),
+        },
+    ).json()
+    client.post(
+        f"/api/v1/leagues/{league_id}/competitions/{competition['id']}/start",
+        headers=headers,
+    )
+    base = f"/api/v1/leagues/{league_id}/competitions/{competition['id']}"
+    payload = {
+        "date": NOW.isoformat(), "ticker": "AAPL", "type": "buy",
+        "quantity": "0.5", "price_per_share": "100",
+        "total_amount": "51.15", "currency": "USD", "fx_rate": "1",
+        "client_trade_id": "reported-api",
+    }
+    created = client.post(f"{base}/reported-trades", headers=headers, json=payload)
+    assert created.status_code == 201
+    assert created.json()["executions"][0]["source"] == "reported"
+    assert created.json()["positions"][0]["quantity"] == "0.5"
+    assert len(client.post(
+        f"{base}/reported-trades", headers=headers, json=payload
+    ).json()["executions"]) == 1
+
+    execution_id = created.json()["executions"][0]["id"]
+    correction = client.post(
+        f"{base}/reported-trades/{execution_id}/corrections", headers=headers,
+        json={"date": NOW.isoformat(), "client_trade_id": "correction-api"},
+    )
+    assert correction.status_code == 201
+    assert correction.json()["cash"] == "3000.00"
+    assert any(item["correction_of"] == execution_id
+               for item in correction.json()["executions"])
+
+
+def test_reported_trade_contract_rejects_excess_precision_and_non_usd():
+    client, token = build_client()
+    headers = {"Authorization": f"Bearer {token}"}
+    invalid = client.post(
+        "/api/v1/leagues/foreign/competitions/foreign/reported-trades",
+        headers=headers,
+        json={
+            "date": NOW.isoformat(), "ticker": "AAPL", "type": "buy",
+            "quantity": "0.123456789", "price_per_share": "100",
+            "total_amount": "13.50", "currency": "EUR", "fx_rate": "1.1",
+            "client_trade_id": "bad",
+        },
+    )
+    assert invalid.status_code == 400
+    hidden = client.post(
+        "/api/v1/leagues/foreign/competitions/foreign/reported-trades",
+        headers=headers,
+        json={
+            "date": NOW.isoformat(), "ticker": "AAPL", "type": "buy",
+            "quantity": "0.5", "price_per_share": "100",
+            "total_amount": "51.15", "currency": "USD", "fx_rate": "1",
+            "client_trade_id": "hidden",
+        },
+    )
+    assert hidden.status_code == 404
+
+
+def test_reported_trade_accepts_madrid_time_and_decimal_commas_by_default():
+    client, token = build_client()
+    headers = {"Authorization": f"Bearer {token}"}
+    league_id = client.post(
+        "/api/v1/leagues", headers=headers, json={"name": "Madrid"}
+    ).json()["id"]
+    competition = client.post(
+        f"/api/v1/leagues/{league_id}/competitions", headers=headers,
+        json={
+            "name": "Horario local",
+            "starts_at": (NOW - timedelta(days=1)).isoformat(),
+            "ends_at": (NOW + timedelta(days=1)).isoformat(),
+        },
+    ).json()
+    client.post(
+        f"/api/v1/leagues/{league_id}/competitions/{competition['id']}/start",
+        headers=headers,
+    )
+    response = client.post(
+        f"/api/v1/leagues/{league_id}/competitions/{competition['id']}/reported-trades",
+        headers=headers,
+        json={
+            "date": "2026-08-05T10:11:00", "ticker": "MU", "type": "buy",
+            "quantity": "1", "price_per_share": "855,70",
+            "total_amount": "856,85", "currency": "USD", "fx_rate": "1",
+            "client_trade_id": "madrid-comma",
+        },
+    )
+    assert response.status_code == 201
+    execution = response.json()["executions"][0]
+    assert execution["price"] == "855.7000"
+    assert execution["commission"] == "1.15"
+    assert execution["executed_at"] == "2026-08-05T10:11:00+02:00"
+
+
+def test_api_accepts_optional_decimal_comma_commissions():
+    client, token = build_client()
+    headers = {"Authorization": f"Bearer {token}"}
+    league_id = client.post(
+        "/api/v1/leagues", headers=headers, json={"name": "Fees"}
+    ).json()["id"]
+    competition = client.post(
+        f"/api/v1/leagues/{league_id}/competitions", headers=headers,
+        json={
+            "name": "Custom fees", "starts_at": NOW.isoformat(),
+            "ends_at": (NOW + timedelta(days=1)).isoformat(),
+        },
+    ).json()
+    base = f"/api/v1/leagues/{league_id}/competitions/{competition['id']}"
+    client.post(f"{base}/start", headers=headers)
+    order = client.post(f"{base}/orders", headers=headers, json={
+        "symbol": "AAPL", "side": "buy", "quantity": "1",
+        "order_type": "limit", "allow_extended_hours": False,
+        "limit_price": "1", "commission": "0,75",
+        "client_order_id": "custom-fee",
+    })
+    assert order.status_code == 201
+    assert order.json()["orders"][0]["commission"] == "0.75"
+
+    reported = client.post(f"{base}/reported-trades", headers=headers, json={
+        "date": NOW.isoformat(), "ticker": "MU", "type": "buy",
+        "quantity": "1", "price_per_share": "100", "total_amount": "100,43",
+        "commission": "0,43", "currency": "USD", "fx_rate": "1",
+        "client_trade_id": "reported-custom-fee",
+    })
+    assert reported.status_code == 201
+    assert reported.json()["executions"][0]["commission"] == "0.43"
+
+
 def test_fastapi_routes_match_canonical_openapi_operation_ids():
     client, _ = build_client()
     generated = client.get("/openapi.json").json()
