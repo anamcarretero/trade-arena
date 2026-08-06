@@ -8,7 +8,8 @@ dominio reproducible, casos de uso de cuentas y ligas, API FastAPI,
 persistencia PostgreSQL, migraciones e imagen OCI verificadas. TA-030 está
 terminado. TA-031 completa acceso, perfil y PWA; TA-032 añade creación de liga,
 invitaciones mediante enlace y administración de miembros; TA-033 incorpora la
-página pública de planes. El siguiente bloque es TA-034: competiciones.
+página pública de planes y TA-034 la creación e inicio de competiciones con
+`rules_snapshot` inmutable. El siguiente bloque es TA-035: cartera y ranking.
 
 ```text
 Next.js PWA/BFF — Vercel
@@ -251,13 +252,14 @@ Secuencia recomendada:
 Cada `/goal` debe expresar resultado, límites y verificación, y referenciar
 este documento en vez de copiar toda la especificación. TA-032 conserva los
 artefactos de instalación, el BFF y el sistema visual de TA-031. El siguiente
-objetivo es TA-033; no activa todavía Friends, Club ni facturación.
+objetivo es TA-035; TA-034 no activa cartera, órdenes, ranking, incorporación
+tardía, Friends, Club ni facturación.
 
 ```text
-/goal Implementa TA-033 conforme a doc/plan-ejecucion-tradearena.md: página
-pública responsive ES/EN de planes con Free disponible y Friends/Club marcados
-como Próximamente. Conserva el BFF y el sistema visual, sin Stripe ni derechos
-de pago.
+/goal Implementa TA-035 conforme a doc/plan-ejecucion-tradearena.md: cartera,
+órdenes, ejecuciones, historial, ranking y marca de incorporación tardía sobre
+las competiciones y `rules_snapshot` inmutable de TA-034. Conserva autorización
+en backend, BFF y capital Free fijo, sin notificaciones, borrado ni facturación.
 ```
 
 ## 6. Supuestos y puertas

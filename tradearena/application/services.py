@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import copy
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
 from .models import (
-    Invitation, InvitationStatus, League, LeagueInvitationView,
-    LeagueMemberView, LeagueView, Membership, OwnInvitationView, Profile, Role,
-    User,
+    Competition, CompetitionStatus, CompetitionView, Invitation,
+    InvitationStatus, League, LeagueInvitationView, LeagueMemberView, LeagueView,
+    Membership, OwnInvitationView, Profile, Role, User,
 )
 from tradearena.ports.identity import IdentityAssertion
 from tradearena.ports.store import StoreConflict
+from tradearena.domain.competition import build_rules_snapshot
 
 
 class ApplicationError(Exception):
@@ -446,3 +448,106 @@ class LeagueService:
         if not local or not domain or "." not in domain:
             raise InvalidInput("el email de la invitación no es válido")
         return normalized
+
+
+class CompetitionService:
+    """Gestiona borradores y fija las reglas vigentes al comenzar."""
+
+    def __init__(
+        self, store, id_factory: Callable[[], str],
+        rules_factory: Callable[[Competition, League], dict[str, object]] | None = None,
+    ) -> None:
+        self.store = store
+        self._id = id_factory
+        self._rules_factory = rules_factory or self._current_rules
+
+    def create(
+        self, actor_id: str, league_id: str, name: str,
+        starts_at: datetime, ends_at: datetime, now: datetime,
+    ) -> CompetitionView:
+        self._validate_schedule(starts_at, ends_at)
+        with self.store.transaction() as uow:
+            actor = LeagueService._membership(uow, actor_id, league_id)
+            if actor.role not in {Role.OWNER, Role.ADMIN}:
+                raise Forbidden("el rol no permite crear competiciones")
+            league = uow.leagues.get(league_id)
+            if not league or not league.active:
+                raise NotFound("liga no encontrada")
+            competition = Competition(
+                self._id(), league_id, name.strip(), starts_at, ends_at,
+            )
+            if not competition.name:
+                raise InvalidInput("el nombre de competición es obligatorio")
+            uow.competitions.add(competition)
+            uow.audit.add(
+                now, actor_id, "competition.created", "competition",
+                competition.id, {"league_id": league_id},
+            )
+            return self._view(competition)
+
+    def list_for(self, actor_id: str, league_id: str) -> list[CompetitionView]:
+        with self.store.transaction() as uow:
+            LeagueService._membership(uow, actor_id, league_id)
+            if not uow.leagues.get(league_id):
+                raise NotFound("liga no encontrada")
+            return [self._view(item) for item in uow.competitions.list_for_league(league_id)]
+
+    def get(
+        self, actor_id: str, league_id: str, competition_id: str,
+    ) -> CompetitionView:
+        with self.store.transaction() as uow:
+            LeagueService._membership(uow, actor_id, league_id)
+            competition = uow.competitions.get(competition_id)
+            if not competition or competition.league_id != league_id:
+                raise NotFound("competición no encontrada")
+            return self._view(competition)
+
+    def start(
+        self, actor_id: str, league_id: str, competition_id: str, now: datetime,
+    ) -> CompetitionView:
+        with self.store.transaction() as uow:
+            actor = LeagueService._membership(uow, actor_id, league_id)
+            league = uow.leagues.get(league_id, for_update=True)
+            competition = uow.competitions.get(competition_id, for_update=True)
+            if not league or not competition or competition.league_id != league_id:
+                raise NotFound("competición no encontrada")
+            if actor.role not in {Role.OWNER, Role.ADMIN}:
+                raise Forbidden("el rol no permite iniciar competiciones")
+            if competition.status is not CompetitionStatus.DRAFT:
+                raise Conflict("la competición ya se ha iniciado")
+            # El snapshot se materializa aquí, no al crear el borrador. La copia
+            # profunda evita compartir referencias con la configuración vigente.
+            competition.rules_snapshot = copy.deepcopy(
+                self._rules_factory(competition, league)
+            )
+            competition.status = CompetitionStatus.ACTIVE
+            competition.started_at = now
+            uow.competitions.save(competition)
+            uow.audit.add(
+                now, actor_id, "competition.started", "competition",
+                competition.id, {"league_id": league_id, "rules_version": "1"},
+            )
+            return self._view(competition)
+
+    @classmethod
+    def _current_rules(
+        cls, competition: Competition, league: League,
+    ) -> dict[str, object]:
+        return build_rules_snapshot(
+            competition.starts_at, competition.ends_at, league.plan,
+        )
+
+    @staticmethod
+    def _validate_schedule(starts_at: datetime, ends_at: datetime) -> None:
+        if starts_at.tzinfo is None or ends_at.tzinfo is None:
+            raise InvalidInput("el calendario necesita zona horaria")
+        if ends_at <= starts_at:
+            raise InvalidInput("el fin debe ser posterior al inicio")
+
+    @staticmethod
+    def _view(competition: Competition) -> CompetitionView:
+        return CompetitionView(
+            competition.id, competition.league_id, competition.name,
+            competition.starts_at, competition.ends_at, competition.status,
+            copy.deepcopy(competition.rules_snapshot), competition.started_at,
+        )

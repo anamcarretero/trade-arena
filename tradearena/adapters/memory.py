@@ -8,7 +8,8 @@ from contextlib import contextmanager
 from datetime import datetime
 
 from tradearena.application.models import (
-    AuditEvent, Invitation, InvitationStatus, League, Membership, Profile, User,
+    AuditEvent, Competition, Invitation, InvitationStatus, League, Membership,
+    Profile, User,
 )
 
 
@@ -194,6 +195,36 @@ class MemoryInvitations:
         )
 
 
+class MemoryCompetitions:
+    def __init__(self, store: "MemoryStore") -> None:
+        self.store = store
+
+    def get(
+        self, competition_id: str, *, for_update: bool = False
+    ) -> Competition | None:
+        competition = self.store._competitions.get(competition_id)
+        return copy.deepcopy(competition)
+
+    def add(self, competition: Competition) -> None:
+        self.store._competitions[competition.id] = copy.deepcopy(competition)
+
+    def save(self, competition: Competition) -> None:
+        current = self.store._competitions.get(competition.id)
+        if current and current.rules_snapshot is not None \
+                and current.rules_snapshot != competition.rules_snapshot:
+            raise ValueError("rules_snapshot es inmutable")
+        self.store._competitions[competition.id] = copy.deepcopy(competition)
+
+    def list_for_league(self, league_id: str) -> list[Competition]:
+        return sorted(
+            (
+                copy.deepcopy(item) for item in self.store._competitions.values()
+                if item.league_id == league_id
+            ),
+            key=lambda item: (item.starts_at, item.id),
+        )
+
+
 class MemoryAudit:
     def __init__(self, store: "MemoryStore") -> None:
         self.store = store
@@ -217,6 +248,7 @@ class MemoryStore:
         self._leagues: dict[str, League] = {}
         self._memberships: dict[tuple[str, str], Membership] = {}
         self._invitations: dict[str, Invitation] = {}
+        self._competitions: dict[str, Competition] = {}
         self._sessions: dict[str, tuple[str, datetime]] = {}
         self._audit: list[AuditEvent] = []
         self._lock = threading.RLock()
@@ -226,6 +258,7 @@ class MemoryStore:
         self.leagues = MemoryLeagues(self)
         self.memberships = MemoryMemberships(self)
         self.invitations = MemoryInvitations(self)
+        self.competitions = MemoryCompetitions(self)
         self.audit = MemoryAudit(self)
 
     @contextmanager
@@ -234,6 +267,7 @@ class MemoryStore:
             names = (
                 "_users", "_users_by_identity", "_users_by_email", "_profiles",
                 "_leagues", "_memberships", "_invitations", "_sessions", "_audit",
+                "_competitions",
             )
             state = copy.deepcopy({name: getattr(self, name) for name in names})
             try:

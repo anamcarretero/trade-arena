@@ -14,7 +14,7 @@ añaden participante autenticado, propietario y administrador de liga. Sus
 recursos son privados y solo se exponen por `/api/v1` tras validar sesión y
 membresía activa.
 
-## 0. Flujos del producto nuevo hasta TA-033
+## 0. Flujos del producto nuevo hasta TA-034
 
 1. Identidad verifica un enlace de email de un solo uso o claims Google con
    emisor, audiencia y email verificado; después se emite una sesión propia.
@@ -91,6 +91,33 @@ BFF no cambia el `404` de ligas ajenas.
    con «Próximamente»/«Coming soon» y sin una acción de compra habilitada.
 4. TA-033 no crea suscripciones, cobros ni derechos nuevos; esas capacidades
    siguen perteneciendo a la Fase 5.
+
+### Competiciones y `rules_snapshot` de TA-034
+
+1. Propietario o administrador abre el detalle de una liga privada y crea un
+   borrador de competición con nombre, fecha de inicio y fecha de fin. Un
+   miembro puede consultar los borradores, pero no crearlos ni iniciarlos.
+2. Mientras el estado es `draft`, `rules_snapshot` permanece vacío. El
+   calendario debe incluir zona horaria y el fin ser posterior al inicio; la
+   API vuelve a validar ambas condiciones aunque se manipule el formulario.
+3. Al pulsar «Iniciar competición»/«Start competition», el backend autentica
+   la sesión, comprueba de nuevo la membresía y el rol y bloquea las filas de
+   liga y competición dentro de la transacción.
+4. En ese instante copia calendario XNYS, zona `America/New_York` y reglas v1 a
+   `rules_snapshot`. Para Free fija siempre `3000.00 USD` de capital virtual
+   inicial por competición; el formulario no admite otro importe.
+5. El snapshot queda inmutable: una segunda petición de inicio se rechaza y
+   PostgreSQL impide sustituirlo incluso fuera del caso de uso. Cambiar las
+   reglas generales más adelante no altera una competición ya iniciada.
+6. La PWA confirma de forma visible en español o inglés que calendario y reglas
+   se copiaron de forma inmutable y muestra el capital y calendario fijados.
+7. Listar, consultar, crear o iniciar mediante una liga ajena devuelve `404`.
+   También responde `404` si el id de competición pertenece a otra liga, sin
+   revelar cuál de los dos recursos existe.
+
+TA-034 no crea participantes, carteras, órdenes, ejecuciones, historial ni
+ranking y tampoco incorpora participantes tardíos. Esos flujos empiezan en
+TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
 
 Para ejecutar el backend contra PostgreSQL se aplican primero las migraciones
 con `DATABASE_URL=... python3 -m tradearena migrate` y se arranca después la API

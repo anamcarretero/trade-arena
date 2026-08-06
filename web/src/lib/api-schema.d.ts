@@ -149,6 +149,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/leagues/{league_id}/competitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listLeagueCompetitions"];
+        put?: never;
+        post: operations["createCompetition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leagues/{league_id}/competitions/{competition_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCompetition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leagues/{league_id}/competitions/{competition_id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Fija de forma inmutable el calendario y las reglas vigentes. */
+        post: operations["startCompetition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/leagues/{league_id}/invitations": {
         parameters: {
             query?: never;
@@ -267,6 +316,46 @@ export interface components {
             expires_at: string;
             status: components["schemas"]["InvitationStatus"];
         };
+        CompetitionInput: {
+            name: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+        };
+        /** @enum {string} */
+        CompetitionStatus: "draft" | "active" | "finished";
+        /** @description Copia inmutable del calendario y reglas vigentes al iniciar. */
+        RulesSnapshot: {
+            version: string;
+            calendar: {
+                market: string;
+                timezone: string;
+                /** Format: date-time */
+                starts_at: string;
+                /** Format: date-time */
+                ends_at: string;
+            };
+            rules: {
+                /** @enum {string} */
+                currency: "USD";
+                initial_capital: string;
+            } & {
+                [key: string]: unknown;
+            };
+        };
+        Competition: {
+            id: string;
+            league_id: string;
+            name: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            status: components["schemas"]["CompetitionStatus"];
+            rules_snapshot: components["schemas"]["RulesSnapshot"] | null;
+            started_at: string | null;
+        };
     };
     responses: {
         /** @description Sesión inválida o acción no autorizada */
@@ -279,6 +368,7 @@ export interface components {
     };
     parameters: {
         LeagueId: string;
+        CompetitionId: string;
     };
     requestBodies: never;
     headers: never;
@@ -549,6 +639,142 @@ export interface operations {
             };
             /** @description No existe o la sesión no pertenece a ella */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listLeagueCompetitions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                league_id: components["parameters"]["LeagueId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Competiciones de una liga accesible para la sesión */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Competition"][];
+                };
+            };
+            /** @description Liga no accesible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createCompetition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                league_id: components["parameters"]["LeagueId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompetitionInput"];
+            };
+        };
+        responses: {
+            /** @description Borrador de competición creado por propietario o administrador */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Competition"];
+                };
+            };
+            /** @description Calendario inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Liga no accesible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getCompetition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                league_id: components["parameters"]["LeagueId"];
+                competition_id: components["parameters"]["CompetitionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Competición de una liga accesible para la sesión */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Competition"];
+                };
+            };
+            /** @description Liga o competición no accesible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    startCompetition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                league_id: components["parameters"]["LeagueId"];
+                competition_id: components["parameters"]["CompetitionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Competición iniciada con rules_snapshot inmutable */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Competition"];
+                };
+            };
+            /** @description Liga o competición no accesible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La competición ya estaba iniciada */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

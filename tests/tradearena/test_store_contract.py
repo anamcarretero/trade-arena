@@ -13,7 +13,8 @@ from tradearena.adapters.memory import MemoryStore
 from tradearena.adapters.postgres import PostgresStore
 from tradearena.application.models import User
 from tradearena.application.services import (
-    AccountService, Forbidden, LeagueService, PlanLimitExceeded, SessionService,
+    AccountService, CompetitionService, Forbidden, LeagueService,
+    PlanLimitExceeded, SessionService,
 )
 from tradearena.migrations import migrate
 from tradearena.ports.identity import IdentityAssertion
@@ -40,11 +41,20 @@ def _exercise_application_contract(store):
     assert sessions.authenticate(token) == owner.id
 
     league = leagues.create(owner.id, "Privada", NOW)
+    competitions = CompetitionService(store, lambda: str(uuid4()))
+    competition = competitions.create(
+        owner.id, league.id, "Agosto", NOW + timedelta(days=1),
+        NOW + timedelta(days=31), NOW,
+    )
+    started = competitions.start(owner.id, league.id, competition.id, NOW)
+    assert started.rules_snapshot["rules"]["initial_capital"] == "3000.00"
     invitation = leagues.invite(owner.id, league.id, member.email, NOW)
     with pytest.raises(PlanLimitExceeded):
         leagues.invite(owner.id, league.id, "third@example.com", NOW)
     assert leagues.list_invitations(member.id, NOW)[0].id == invitation.id
     leagues.accept(member.id, invitation.id, NOW)
+    assert competitions.get(member.id, league.id, competition.id).id \
+        == competition.id
 
     detail = leagues.get(member.id, league.id, NOW)
     assert detail.name == "Privada"
@@ -81,7 +91,8 @@ def postgres_store():
     dsn = make_conninfo(TEST_DATABASE_URL, options=f"-c search_path={schema}")
     try:
         assert migrate(dsn) == [
-            "001_initial", "002_auth0_identity", "003_league_reads"
+            "001_initial", "002_auth0_identity", "003_league_reads",
+            "004_competitions",
         ]
         assert migrate(dsn) == []
         yield PostgresStore(dsn)
@@ -123,7 +134,7 @@ def test_auth0_migration_upgrades_the_previous_schema(postgres_store, tmp_path):
     try:
         assert migrate(previous_dsn, previous_migrations) == ["001_initial"]
         assert migrate(previous_dsn) == [
-            "002_auth0_identity", "003_league_reads"
+            "002_auth0_identity", "003_league_reads", "004_competitions"
         ]
         assert migrate(previous_dsn) == []
     finally:
@@ -186,3 +197,27 @@ def test_postgres_serializes_free_invitation_slots(postgres_store):
         results = list(executor.map(invite, ["one@example.com", "two@example.com"]))
 
     assert sorted(results) == ["created", "limited"]
+
+
+def test_postgres_rejects_rules_snapshot_replacement(postgres_store):
+    accounts = AccountService(postgres_store, lambda: str(uuid4()))
+    owner = accounts.login(
+        IdentityAssertion("email", "snapshot@example.com", "snapshot@example.com", True),
+        NOW,
+    )
+    league = LeagueService(postgres_store, lambda: str(uuid4())).create(
+        owner.id, "Snapshot", NOW,
+    )
+    competitions = CompetitionService(postgres_store, lambda: str(uuid4()))
+    competition = competitions.create(
+        owner.id, league.id, "Inmutable", NOW + timedelta(days=1),
+        NOW + timedelta(days=2), NOW,
+    )
+    competitions.start(owner.id, league.id, competition.id, NOW)
+
+    with pytest.raises(psycopg.errors.CheckViolation, match="inmutable"):
+        with psycopg.connect(postgres_store.dsn) as connection:
+            connection.execute(
+                "UPDATE competitions SET rules_snapshot = %s WHERE id = %s",
+                (psycopg.types.json.Jsonb({"tampered": True}), competition.id),
+            )

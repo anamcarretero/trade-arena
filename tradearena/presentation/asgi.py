@@ -35,6 +35,14 @@ class InvitationInput(BaseModel):
     email: str = Field(min_length=3, max_length=254)
 
 
+class CompetitionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    starts_at: datetime
+    ends_at: datetime
+
+
 class AuthSessionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -130,6 +138,57 @@ def create_app(api: Api, readiness: Callable[[], bool] | None = None) -> FastAPI
     def get_league(league_id: str, token: str | None = Depends(_token)):
         return _response(api.handle(
             "GET", f"/api/v1/leagues/{league_id}", token
+        ))
+
+    @app.get(
+        "/api/v1/leagues/{league_id}/competitions",
+        operation_id="listLeagueCompetitions",
+    )
+    def list_league_competitions(
+        league_id: str, token: str | None = Depends(_token)
+    ):
+        return _response(api.handle(
+            "GET", f"/api/v1/leagues/{league_id}/competitions", token
+        ))
+
+    @app.post(
+        "/api/v1/leagues/{league_id}/competitions",
+        operation_id="createCompetition",
+    )
+    def create_competition(
+        league_id: str, data: CompetitionInput,
+        token: str | None = Depends(_token),
+    ):
+        return _response(api.handle(
+            "POST", f"/api/v1/leagues/{league_id}/competitions", token,
+            data.model_dump(mode="json"),
+        ))
+
+    @app.get(
+        "/api/v1/leagues/{league_id}/competitions/{competition_id}",
+        operation_id="getCompetition",
+    )
+    def get_competition(
+        league_id: str, competition_id: str,
+        token: str | None = Depends(_token),
+    ):
+        return _response(api.handle(
+            "GET",
+            f"/api/v1/leagues/{league_id}/competitions/{competition_id}", token,
+        ))
+
+    @app.post(
+        "/api/v1/leagues/{league_id}/competitions/{competition_id}/start",
+        operation_id="startCompetition",
+    )
+    def start_competition(
+        league_id: str, competition_id: str,
+        token: str | None = Depends(_token),
+    ):
+        return _response(api.handle(
+            "POST",
+            f"/api/v1/leagues/{league_id}/competitions/{competition_id}/start",
+            token,
         ))
 
     @app.post(
