@@ -26,9 +26,25 @@ test("an owner creates and starts a competition with immutable ES/EN confirmatio
   await page.getByRole("button", {name: /Iniciar competición/}).click();
 
   await expect(page.getByText("Calendario y reglas copiados de forma inmutable")).toBeVisible();
-  await expect(page.getByText("3000.00 USD")).toBeVisible();
+  await expect(page.getByRole("definition").filter({hasText: "3000.00 USD"})).toBeVisible();
   await expect(page.getByText("XNYS · America/New_York")).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Cartera y órdenes"})).toBeVisible();
+  await page.getByLabel("Símbolo").fill("AAPL");
+  await page.getByLabel("Acciones enteras").fill("2");
+  await page.getByRole("button", {name: /Enviar orden/}).click();
+  await expect(page.getByText("Orden enviada.")).toBeVisible();
+  await expect(page.getByText("2799.01 USD")).toBeVisible();
+  await expect(page.getByText("Ejecutada")).toBeVisible();
+  await expect(page.getByRole("strong").filter({hasText: "Member E2E"})).toBeVisible();
+  await expect(page.getByText("Incorporación tardía", {exact: true})).toBeVisible();
   await page.getByRole("link", {name: "EN", exact: true}).click();
   await expect(page.getByText("Calendar and rules copied immutably")).toBeVisible();
   await expect(page.getByText("This competition will not change when the general rules are updated.")).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Portfolio and orders"})).toBeVisible();
+  await expect(page.getByText("Late entry", {exact: true})).toBeVisible();
+  await page.setViewportSize({width: 375, height: 812});
+  const noHorizontalScroll = await page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+  );
+  expect(noHorizontalScroll).toBe(true);
 });

@@ -2083,6 +2083,200 @@ a {
   }
 }
 
+.trading-panel {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.late-entry {
+  display: flex;
+  gap: .45rem;
+  flex-direction: column;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid #d99d42;
+  border-radius: 12px;
+  background: color-mix(in srgb, #d99d42 10%, transparent);
+}
+
+.portfolio-metrics,
+.trading-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .8rem;
+}
+
+.portfolio-metrics > div,
+.trade-card {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .025);
+}
+
+.portfolio-metrics span,
+.portfolio-metrics strong {
+  display: block;
+}
+
+.portfolio-metrics span,
+.compact-list span,
+.history-list span {
+  color: var(--muted);
+  font-size: .82rem;
+}
+
+.portfolio-metrics strong {
+  margin-top: .35rem;
+  font-size: 1.25rem;
+}
+
+.trading-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: .8rem;
+}
+
+.trade-card h4 {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+}
+
+.wide-card {
+  grid-column: 1 / -1;
+}
+
+.order-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.order-form label:not(.checkbox-row) {
+  display: grid;
+  gap: .35rem;
+  font-size: .82rem;
+}
+
+.order-form input,
+.order-form select {
+  width: 100%;
+  min-height: 42px;
+  padding: .6rem .7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: inherit;
+  background: var(--panel);
+}
+
+.checkbox-row {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: .55rem;
+  font-size: .82rem;
+}
+
+.checkbox-row input {
+  width: auto;
+  min-height: auto;
+}
+
+.compact-list,
+.history-list {
+  display: grid;
+  gap: .65rem;
+}
+
+.compact-list > div,
+.history-list article {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: .65rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.compact-list strong,
+.compact-list span,
+.history-list strong,
+.history-list span {
+  display: block;
+}
+
+.history-status {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+}
+
+.status-pill {
+  padding: .3rem .55rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.status-pill.filled { color: #6ed8a2; }
+.status-pill.rejected { color: #ff8a8a; }
+.status-pill.cancelled { color: var(--muted); }
+
+.ranking-card ol {
+  display: grid;
+  gap: .45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ranking-card li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: .55rem;
+  padding: .6rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.ranking-card small {
+  grid-column: 2;
+  color: #d99d42;
+}
+
+.rank-number {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--blue);
+  color: #101010;
+}
+
+@media (max-width: 760px) {
+  .portfolio-metrics,
+  .trading-grid,
+  .order-form {
+    grid-template-columns: 1fr;
+  }
+
+  .wide-card,
+  .checkbox-row {
+    grid-column: auto;
+  }
+
+  .compact-list > div,
+  .history-list article {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .history-status {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

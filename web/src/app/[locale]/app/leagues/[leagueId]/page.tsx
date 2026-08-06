@@ -3,7 +3,7 @@ import {notFound, redirect} from "next/navigation";
 import {CopyInvitationLink} from "@/components/copy-invitation-link";
 import {LocaleSwitcher} from "@/components/locale-switcher";
 import {CompetitionSection} from "@/components/competition-section";
-import {leagueCompetitions, leagueDetail, ownAccount} from "@/lib/api";
+import {competitionPortfolio, competitionRanking, leagueCompetitions, leagueDetail, ownAccount} from "@/lib/api";
 import {copy, isLocale} from "@/lib/i18n";
 import {invitationPath} from "@/lib/invitations";
 import {canManageLeague, occupiedSeats} from "@/lib/league-state";
@@ -26,6 +26,15 @@ export default async function LeaguePage({params, searchParams}: {
   if (!competitions) return <AccessDenied locale={rawLocale} message={text.leagueAccessError}/>;
   const state = await searchParams;
   const manager = canManageLeague(league);
+  const trading = Object.fromEntries((await Promise.all(competitions
+    .filter(competition => competition.status !== "draft")
+    .map(async competition => {
+      const [portfolio, ranking] = await Promise.all([
+        competitionPortfolio(leagueId, competition.id),
+        competitionRanking(leagueId, competition.id)
+      ]);
+      return portfolio && ranking ? [competition.id, {portfolio, ranking}] as const : null;
+    }))).filter(entry => entry !== null));
   const occupied = occupiedSeats(league);
   const emptySeats = Math.max(0, league.max_members - occupied);
 
@@ -44,7 +53,7 @@ export default async function LeaguePage({params, searchParams}: {
       {state.error === "access" ? text.leagueAccessError : state.error === "league-full" ? text.leagueFullError : text.leagueActionError}
     </p>}
     {state.status && <p className="success arena-message" role="status">
-      {state.status === "invited" ? text.invitedStatus : state.status === "revoked" ? text.revokedStatus : state.status === "removed" ? text.removedStatus : state.status === "competition-created" ? text.competitionCreatedStatus : text.competitionStartedStatus}
+      {state.status === "invited" ? text.invitedStatus : state.status === "revoked" ? text.revokedStatus : state.status === "removed" ? text.removedStatus : state.status === "competition-created" ? text.competitionCreatedStatus : state.status === "competition-started" ? text.competitionStartedStatus : state.status === "order-cancelled" ? text.orderCancelledStatus : text.orderSubmittedStatus}
     </p>}
 
     <section className="arena-section">
@@ -67,7 +76,7 @@ export default async function LeaguePage({params, searchParams}: {
       </div>
     </section>
 
-    <CompetitionSection locale={rawLocale} leagueId={league.id} competitions={competitions} manager={manager}/>
+    <CompetitionSection locale={rawLocale} leagueId={league.id} competitions={competitions} manager={manager} trading={trading}/>
 
     {manager && <section className="league-admin-grid">
       <div className="admin-panel">

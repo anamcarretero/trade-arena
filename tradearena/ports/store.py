@@ -7,8 +7,9 @@ from datetime import datetime
 from typing import Protocol
 
 from tradearena.application.models import (
-    Competition, Invitation, League, Membership, Profile, User,
+    Competition, Invitation, League, Membership, Profile, TradingAccount, User,
 )
+from tradearena.domain.ranking import RankingSnapshot
 
 
 class StoreConflict(RuntimeError):
@@ -82,6 +83,17 @@ class CompetitionRepository(Protocol):
     def list_for_league(self, league_id: str) -> list[Competition]: ...
 
 
+class TradingRepository(Protocol):
+    def get(
+        self, competition_id: str, user_id: str, *, for_update: bool = False,
+    ) -> TradingAccount | None: ...
+    def add(self, account: TradingAccount) -> None: ...
+    def save(self, account: TradingAccount) -> None: ...
+    def list_for_competition(self, competition_id: str) -> list[TradingAccount]: ...
+    def save_ranking(self, snapshot: RankingSnapshot) -> None: ...
+    def latest_ranking(self, competition_id: str) -> RankingSnapshot | None: ...
+
+
 class AuditRepository(Protocol):
     def add(
         self, occurred_at: datetime, actor_id: str | None, action: str,
@@ -97,6 +109,7 @@ class UnitOfWork(Protocol):
     memberships: MembershipRepository
     invitations: InvitationRepository
     competitions: CompetitionRepository
+    trading: TradingRepository
     audit: AuditRepository
 
 

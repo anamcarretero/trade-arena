@@ -1,15 +1,17 @@
-import type {Competition} from "../lib/api";
+import type {Competition, Portfolio, Ranking} from "../lib/api";
 import {copy, type Locale} from "../lib/i18n";
 import {createCompetition, startCompetition} from "../app/[locale]/app/leagues/actions";
 import {RulesSnapshotConfirmation} from "./rules-snapshot-confirmation";
+import {TradingPanel} from "./trading-panel";
 
 export function CompetitionSection({
-  locale, leagueId, competitions, manager
+  locale, leagueId, competitions, manager, trading
 }: {
   locale: Locale;
   leagueId: string;
   competitions: Competition[];
   manager: boolean;
+  trading: Record<string, {portfolio: Portfolio; ranking: Ranking}>;
 }) {
   const text = copy[locale];
   return <section className="arena-section competition-section">
@@ -40,6 +42,9 @@ export function CompetitionSection({
               <input type="hidden" name="competition_id" value={competition.id}/>
               <button className="primary" type="submit">{text.startCompetition}<span aria-hidden="true">→</span></button>
             </form>}
+          {trading[competition.id] && <TradingPanel locale={locale} leagueId={leagueId}
+            competitionId={competition.id} portfolio={trading[competition.id].portfolio}
+            ranking={trading[competition.id].ranking}/>}
         </article>)}</div>}
   </section>;
 }

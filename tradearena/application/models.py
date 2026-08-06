@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import Enum
+from tradearena.domain.trading import Portfolio
 
 
 class Role(str, Enum):
@@ -138,6 +139,75 @@ class CompetitionView:
     status: CompetitionStatus
     rules_snapshot: dict[str, object] | None
     started_at: datetime | None
+
+
+@dataclass
+class TradingAccount:
+    competition_id: str
+    user_id: str
+    joined_at: datetime
+    joined_late: bool
+    portfolio: Portfolio
+
+
+@dataclass(frozen=True)
+class PositionView:
+    symbol: str
+    quantity: int
+    price: str | None
+    market_value: str | None
+
+
+@dataclass(frozen=True)
+class OrderView:
+    id: str
+    symbol: str
+    side: str
+    quantity: int
+    order_type: str
+    allow_extended_hours: bool
+    limit_price: str | None
+    status: str
+    rejection_reason: str | None
+    submitted_at: datetime
+
+
+@dataclass(frozen=True)
+class ExecutionView:
+    id: str
+    order_id: str
+    symbol: str
+    side: str
+    quantity: int
+    price: str
+    commission: str
+    session: str
+    executed_at: datetime
+
+
+@dataclass(frozen=True)
+class PortfolioView:
+    id: str
+    competition_id: str
+    user_id: str
+    currency: str
+    initial_cash: str
+    cash: str
+    joined_at: datetime
+    joined_late: bool
+    positions: tuple[PositionView, ...]
+    orders: tuple[OrderView, ...]
+    executions: tuple[ExecutionView, ...]
+    equity: str
+    cumulative_return: str
+
+
+@dataclass(frozen=True)
+class RankingView:
+    competition_id: str
+    as_of: datetime
+    rows: tuple[dict[str, object], ...]
+    digest: str
 
 
 @dataclass(frozen=True)

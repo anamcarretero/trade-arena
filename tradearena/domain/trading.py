@@ -94,7 +94,8 @@ class Order:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "symbol", self.symbol.upper())
-        if self.quantity <= 0:
+        if isinstance(self.quantity, bool) or not isinstance(self.quantity, int) \
+                or self.quantity <= 0:
             raise ValueError("la cantidad debe ser un entero positivo")
         if self.submitted_at.tzinfo is None:
             raise ValueError("la orden necesita zona horaria")
@@ -221,8 +222,14 @@ class PortfolioSnapshot:
 
 
 class TradingEngine:
-    REGULAR_COMMISSION = Decimal("0.99")
-    EXTENDED_COMMISSION = Decimal("2.99")
+    """Ejecuta con las comisiones inmutables recibidas del ``rules_snapshot``."""
+
+    def __init__(
+        self, regular_commission: Decimal = Decimal("0.99"),
+        extended_commission: Decimal = Decimal("2.99"),
+    ) -> None:
+        self.regular_commission = money(regular_commission)
+        self.extended_commission = money(extended_commission)
 
     def submit(self, portfolio: Portfolio, order: Order) -> Order:
         if order.id in portfolio.orders:
@@ -237,6 +244,14 @@ class TradingEngine:
         cancelled = replace(order, status=OrderStatus.CANCELLED)
         portfolio.orders[order_id] = cancelled
         return cancelled
+
+    def close_pending(self, portfolio: Portfolio, reason: str) -> None:
+        for order_id, order in tuple(portfolio.orders.items()):
+            if order.status is OrderStatus.PENDING:
+                portfolio.orders[order_id] = replace(
+                    order, status=OrderStatus.CANCELLED,
+                    rejection_reason=reason,
+                )
 
     def process_quote(self, portfolio: Portfolio, quote: Quote) -> tuple[Execution, ...]:
         results: list[Execution] = []
@@ -266,8 +281,8 @@ class TradingEngine:
 
     def _execute(self, portfolio: Portfolio, order: Order, quote: Quote) -> Execution | None:
         commission = money(
-            self.REGULAR_COMMISSION if quote.session is Session.REGULAR
-            else self.EXTENDED_COMMISSION
+            self.regular_commission if quote.session is Session.REGULAR
+            else self.extended_commission
         )
         gross = money(quote.value * order.quantity)
         if order.side is OrderSide.BUY:

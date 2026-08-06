@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 from uuid import uuid4
+from decimal import Decimal
 
 import psycopg
 from psycopg import sql
@@ -11,11 +12,13 @@ import pytest
 
 from tradearena.adapters.memory import MemoryStore
 from tradearena.adapters.postgres import PostgresStore
+from tradearena.adapters.market_data import FixtureMarketDataAdapter
 from tradearena.application.models import User
 from tradearena.application.services import (
     AccountService, CompetitionService, Forbidden, LeagueService,
-    PlanLimitExceeded, SessionService,
+    PlanLimitExceeded, SessionService, TradingService,
 )
+from tradearena.domain.trading import Quote, Session
 from tradearena.migrations import migrate
 from tradearena.ports.identity import IdentityAssertion
 
@@ -63,6 +66,27 @@ def _exercise_application_contract(store):
     assert [item.id for item in leagues.list_for(member.id, NOW)] == [league.id]
     assert accounts.export(member.id, member.id)["memberships"][0]["league_id"] \
         == league.id
+    quote_time = NOW + timedelta(days=1, minutes=1)
+    trading = TradingService(store, lambda: str(uuid4()), FixtureMarketDataAdapter((
+        Quote("AAPL", Decimal("100"), quote_time, Session.REGULAR),
+    )))
+    portfolio = trading.portfolio(member.id, league.id, competition.id, NOW)
+    assert portfolio.initial_cash == portfolio.cash == "3000.00"
+    assert portfolio.joined_late is True
+    trading.submit_order(
+        owner.id, league.id, competition.id, "AAPL", "buy", 1, "market",
+        False, None, NOW + timedelta(days=1, seconds=1), str(uuid4()),
+    )
+    filled = trading.portfolio(owner.id, league.id, competition.id, quote_time)
+    assert filled.cash == "2899.01"
+    assert filled.executions[0].commission == "0.99"
+    with store.transaction() as uow:
+        account = uow.trading.get(competition.id, owner.id)
+        assert all(sum(posting.amount for posting in entry.postings) == 0
+                   for entry in account.portfolio.ledger)
+    ranking = trading.ranking(owner.id, league.id, competition.id, quote_time)
+    assert len(ranking.rows) == 2
+    assert trading.ranking(owner.id, league.id, competition.id, quote_time) == ranking
 
 
 def test_memory_store_passes_application_contract_and_rolls_back():
@@ -92,7 +116,7 @@ def postgres_store():
     try:
         assert migrate(dsn) == [
             "001_initial", "002_auth0_identity", "003_league_reads",
-            "004_competitions",
+            "004_competitions", "005_trading_ranking",
         ]
         assert migrate(dsn) == []
         yield PostgresStore(dsn)
@@ -134,9 +158,32 @@ def test_auth0_migration_upgrades_the_previous_schema(postgres_store, tmp_path):
     try:
         assert migrate(previous_dsn, previous_migrations) == ["001_initial"]
         assert migrate(previous_dsn) == [
-            "002_auth0_identity", "003_league_reads", "004_competitions"
+            "002_auth0_identity", "003_league_reads", "004_competitions",
+            "005_trading_ranking",
         ]
         assert migrate(previous_dsn) == []
+    finally:
+        with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
+            admin.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))
+
+
+def test_trading_migration_upgrades_ta034_schema(postgres_store, tmp_path):
+    schema = f"tradearena_ta034_{uuid4().hex}"
+    with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
+    previous_dsn = make_conninfo(postgres_store.dsn, options=f"-c search_path={schema}")
+    previous_migrations = tmp_path / "ta034-migrations"
+    previous_migrations.mkdir()
+    source = Path(__file__).parents[2] / "migrations"
+    for version in range(1, 5):
+        path = next(source.glob(f"{version:03d}_*.sql"))
+        (previous_migrations / path.name).write_text(path.read_text())
+    try:
+        assert migrate(previous_dsn, previous_migrations) == [
+            "001_initial", "002_auth0_identity", "003_league_reads",
+            "004_competitions",
+        ]
+        assert migrate(previous_dsn) == ["005_trading_ranking"]
     finally:
         with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
             admin.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))

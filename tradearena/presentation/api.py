@@ -40,6 +40,7 @@ class Api:
     def __init__(
         self, sessions, accounts, leagues, clock: Callable[[], datetime],
         auth=None, bff_shared_secret: str | None = None, competitions=None,
+        trading=None,
     ) -> None:
         self.sessions = sessions
         self.accounts = accounts
@@ -48,6 +49,7 @@ class Api:
         self.auth = auth
         self.bff_shared_secret = bff_shared_secret
         self.competitions = competitions
+        self.trading = trading
 
     def handle(
         self, method: str, path: str, token: str | None = None,
@@ -129,6 +131,36 @@ class Api:
                     actor, route[1], route[3], now,
                 )
                 return ApiResponse(200, _json(asdict(competition)))
+            if len(route) == 5 and route[0] == "leagues" \
+                    and route[2] == "competitions" and route[4] == "portfolio" \
+                    and method == "GET":
+                result = self.trading.portfolio(actor, route[1], route[3], now)
+                return ApiResponse(200, _json(asdict(result)))
+            if len(route) == 5 and route[0] == "leagues" \
+                    and route[2] == "competitions" and route[4] == "orders" \
+                    and method == "POST":
+                result = self.trading.submit_order(
+                    actor, route[1], route[3], str(body.get("symbol", "")),
+                    str(body.get("side", "")), body.get("quantity"),
+                    str(body.get("order_type", "")),
+                    bool(body.get("allow_extended_hours", False)),
+                    str(body["limit_price"]) if body.get("limit_price") is not None else None,
+                    now, str(body["client_order_id"])
+                    if body.get("client_order_id") else None,
+                )
+                return ApiResponse(201, _json(asdict(result)))
+            if len(route) == 6 and route[0] == "leagues" \
+                    and route[2] == "competitions" and route[4] == "orders" \
+                    and method == "DELETE":
+                result = self.trading.cancel_order(
+                    actor, route[1], route[3], route[5], now,
+                )
+                return ApiResponse(200, _json(asdict(result)))
+            if len(route) == 5 and route[0] == "leagues" \
+                    and route[2] == "competitions" and route[4] == "ranking" \
+                    and method == "GET":
+                result = self.trading.ranking(actor, route[1], route[3], now)
+                return ApiResponse(200, _json(asdict(result)))
             if len(route) == 3 and route[0] == "leagues" \
                     and route[2] == "invitations" and method == "POST":
                 invitation = self.leagues.invite(
@@ -155,7 +187,7 @@ class Api:
             return ApiResponse(404, {"error": "not_found"})
         except KeyError as exc:
             return ApiResponse(400, {"error": "invalid_input", "detail": f"falta {exc.args[0]}"})
-        except (ValueError, InvalidInput) as exc:
+        except (TypeError, ValueError, InvalidInput) as exc:
             return ApiResponse(400, {"error": "invalid_input", "detail": str(exc)})
         except Forbidden as exc:
             return ApiResponse(403, {"error": exc.code})

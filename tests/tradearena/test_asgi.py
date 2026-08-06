@@ -5,9 +5,10 @@ import yaml
 from fastapi.testclient import TestClient
 
 from tradearena.adapters.memory import MemoryStore
+from tradearena.adapters.market_data import FixtureMarketDataAdapter
 from tradearena.application.services import (
     AccountService, AuthService, CompetitionService, LeagueService,
-    SessionService,
+    SessionService, TradingService,
 )
 from tradearena.ports.identity import IdentityAssertion
 from tradearena.presentation.api import Api
@@ -40,6 +41,7 @@ def build_client(readiness=lambda: True):
     dispatcher = Api(
         sessions, accounts, leagues, lambda: NOW,
         competitions=CompetitionService(store, ids),
+        trading=TradingService(store, ids, FixtureMarketDataAdapter()),
     )
     return TestClient(create_app(dispatcher, readiness)), token
 
@@ -124,6 +126,44 @@ def test_fastapi_creates_and_starts_competition_with_snapshot():
     assert started.status_code == 200
     assert started.json()["rules_snapshot"]["rules"]["initial_capital"] \
         == "3000.00"
+
+
+def test_fastapi_exposes_portfolio_orders_history_and_ranking():
+    client, token = build_client()
+    headers = {"Authorization": f"Bearer {token}"}
+    league_id = client.post(
+        "/api/v1/leagues", headers=headers, json={"name": "Trading"}
+    ).json()["id"]
+    competition = client.post(
+        f"/api/v1/leagues/{league_id}/competitions", headers=headers,
+        json={
+            "name": "Actual", "starts_at": NOW.isoformat(),
+            "ends_at": (NOW + timedelta(days=7)).isoformat(),
+        },
+    ).json()
+    client.post(
+        f"/api/v1/leagues/{league_id}/competitions/{competition['id']}/start",
+        headers=headers,
+    )
+    base = f"/api/v1/leagues/{league_id}/competitions/{competition['id']}"
+    portfolio = client.get(f"{base}/portfolio", headers=headers)
+    assert portfolio.status_code == 200
+    assert portfolio.json()["initial_cash"] == "3000.00"
+    submitted = client.post(
+        f"{base}/orders", headers=headers, json={
+            "symbol": "AAPL", "side": "buy", "quantity": 1,
+            "order_type": "limit", "limit_price": "1.0000",
+            "allow_extended_hours": False, "client_order_id": "order-e2e",
+        },
+    )
+    assert submitted.status_code == 201
+    assert submitted.json()["orders"][0]["status"] == "pending"
+    order_id = submitted.json()["orders"][0]["id"]
+    cancelled = client.delete(f"{base}/orders/{order_id}", headers=headers)
+    assert cancelled.json()["orders"][0]["status"] == "cancelled"
+    ranking = client.get(f"{base}/ranking", headers=headers)
+    assert ranking.status_code == 200
+    assert ranking.json()["rows"][0]["cumulative_return"] == "0E-12"
 
 
 def test_fastapi_routes_match_canonical_openapi_operation_ids():

@@ -13,7 +13,12 @@ from psycopg.types.json import Jsonb
 
 from tradearena.application.models import (
     Competition, CompetitionStatus, Invitation, InvitationStatus, League,
-    Membership, Profile, Role, User,
+    Membership, Profile, Role, TradingAccount, User,
+)
+from tradearena.domain.ranking import RankingRow, RankingSnapshot
+from tradearena.domain.trading import (
+    Execution, JournalEntry, Order, OrderSide, OrderStatus, OrderType,
+    Portfolio, Posting, Session,
 )
 from tradearena.ports.store import StoreConflict
 
@@ -458,6 +463,227 @@ class PostgresCompetitions(_Repository):
         return [_competition(row) for row in rows]
 
 
+class PostgresTrading(_Repository):
+    def get(
+        self, competition_id: str, user_id: str, *, for_update: bool = False,
+    ) -> TradingAccount | None:
+        suffix = " FOR UPDATE OF p" if for_update else ""
+        row = self.connection.execute(
+            """
+            SELECT p.id, p.initial_cash, cp.joined_at, cp.joined_late, ca.balance
+              FROM competition_participants cp
+              JOIN portfolios p ON p.competition_id = cp.competition_id
+               AND p.user_id = cp.user_id
+              JOIN cash_accounts ca ON ca.portfolio_id = p.id
+             WHERE cp.competition_id = %s AND cp.user_id = %s
+            """ + suffix,
+            (competition_id, user_id),
+        ).fetchone()
+        if row is None:
+            return None
+        portfolio = self._load_portfolio(str(row["id"]), row)
+        return TradingAccount(
+            competition_id, user_id, row["joined_at"], row["joined_late"], portfolio,
+        )
+
+    def _load_portfolio(self, portfolio_id: str, row) -> Portfolio:
+        portfolio = Portfolio(portfolio_id, row["initial_cash"])
+        portfolio.cash = row["balance"]
+        position_rows = self.connection.execute(
+            "SELECT symbol, quantity FROM portfolio_positions WHERE portfolio_id = %s",
+            (portfolio_id,),
+        ).fetchall()
+        portfolio.positions = {item["symbol"]: item["quantity"] for item in position_rows}
+        order_rows = self.connection.execute(
+            """
+            SELECT o.*, i.symbol FROM orders o JOIN instruments i ON i.id = o.instrument_id
+             WHERE o.portfolio_id = %s ORDER BY o.submitted_at, o.id
+            """,
+            (portfolio_id,),
+        ).fetchall()
+        portfolio.orders = {str(item["id"]): Order(
+            str(item["id"]), item["symbol"], OrderSide(item["side"]),
+            item["quantity"], OrderType(item["order_type"]),
+            item["allow_extended_hours"], item["submitted_at"],
+            item["limit_price"], OrderStatus(item["status"]),
+            item["rejection_reason"],
+        ) for item in order_rows}
+        execution_rows = self.connection.execute(
+            """
+            SELECT e.*, i.symbol, o.side FROM executions e
+              JOIN orders o ON o.id = e.order_id
+              JOIN instruments i ON i.id = o.instrument_id
+             WHERE o.portfolio_id = %s ORDER BY e.executed_at, e.id
+            """,
+            (portfolio_id,),
+        ).fetchall()
+        portfolio.executions = [Execution(
+            str(item["id"]), str(item["order_id"]), item["symbol"],
+            OrderSide(item["side"]), item["quantity"], item["price"],
+            item["commission"], item["executed_at"], Session(item["session"]),
+        ) for item in execution_rows]
+        entry_rows = self.connection.execute(
+            """
+            SELECT le.sequence, le.occurred_at, le.kind, le.reference,
+                   lp.account, lp.amount
+              FROM ledger_entries le LEFT JOIN ledger_postings lp ON lp.entry_id = le.id
+             WHERE le.portfolio_id = %s ORDER BY le.sequence, lp.id
+            """,
+            (portfolio_id,),
+        ).fetchall()
+        grouped: dict[int, dict] = {}
+        for item in entry_rows:
+            entry = grouped.setdefault(item["sequence"], {
+                "occurred_at": item["occurred_at"], "kind": item["kind"],
+                "reference": item["reference"], "postings": [],
+            })
+            if item["account"] is not None:
+                entry["postings"].append(Posting(item["account"], item["amount"]))
+        portfolio.ledger = [JournalEntry(
+            sequence, item["occurred_at"], item["kind"], item["reference"],
+            tuple(item["postings"]),
+        ) for sequence, item in sorted(grouped.items())]
+        return portfolio
+
+    def add(self, account: TradingAccount) -> None:
+        portfolio = account.portfolio
+        self.connection.execute(
+            """
+            INSERT INTO competition_participants(
+                competition_id, user_id, joined_at, joined_late
+            ) VALUES (%s, %s, %s, %s)
+            """,
+            (account.competition_id, account.user_id, account.joined_at,
+             account.joined_late),
+        )
+        self.connection.execute(
+            """
+            INSERT INTO portfolios(id, competition_id, user_id, currency, initial_cash)
+            VALUES (%s, %s, %s, 'USD', %s)
+            """,
+            (portfolio.id, account.competition_id, account.user_id,
+             portfolio.initial_cash),
+        )
+        self.connection.execute(
+            "INSERT INTO cash_accounts(portfolio_id, balance) VALUES (%s, %s)",
+            (portfolio.id, portfolio.cash),
+        )
+        self._save_details(portfolio)
+
+    def save(self, account: TradingAccount) -> None:
+        self.connection.execute(
+            "UPDATE cash_accounts SET balance = %s WHERE portfolio_id = %s",
+            (account.portfolio.cash, account.portfolio.id),
+        )
+        self._save_details(account.portfolio)
+
+    def _instrument_id(self, symbol: str) -> str:
+        row = self.connection.execute(
+            """
+            INSERT INTO instruments(symbol, kind, currency) VALUES (%s, 'stock', 'USD')
+            ON CONFLICT (symbol) DO UPDATE SET symbol = EXCLUDED.symbol
+            RETURNING id
+            """,
+            (symbol,),
+        ).fetchone()
+        return str(row["id"])
+
+    def _save_details(self, portfolio: Portfolio) -> None:
+        self.connection.execute(
+            "DELETE FROM portfolio_positions WHERE portfolio_id = %s",
+            (portfolio.id,),
+        )
+        for symbol, quantity in sorted(portfolio.positions.items()):
+            self.connection.execute(
+                "INSERT INTO portfolio_positions(portfolio_id, symbol, quantity) VALUES (%s, %s, %s)",
+                (portfolio.id, symbol, quantity),
+            )
+        for order in portfolio.orders.values():
+            instrument_id = self._instrument_id(order.symbol)
+            self.connection.execute(
+                """
+                INSERT INTO orders(
+                    id, portfolio_id, instrument_id, side, order_type, quantity,
+                    limit_price, allow_extended_hours, status, submitted_at,
+                    rejection_reason
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status,
+                    rejection_reason = EXCLUDED.rejection_reason
+                """,
+                (order.id, portfolio.id, instrument_id, order.side.value,
+                 order.order_type.value, order.quantity, order.limit_price,
+                 order.allow_extended_hours, order.status.value,
+                 order.submitted_at, order.rejection_reason),
+            )
+        for execution in portfolio.executions:
+            self.connection.execute(
+                """
+                INSERT INTO executions(
+                    id, order_id, quantity, price, commission, session, executed_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (order_id) DO NOTHING
+                """,
+                (execution.id, execution.order_id, execution.quantity,
+                 execution.price, execution.commission, execution.session.value,
+                 execution.executed_at),
+            )
+        self.connection.execute(
+            "DELETE FROM ledger_postings WHERE entry_id IN (SELECT id FROM ledger_entries WHERE portfolio_id = %s)",
+            (portfolio.id,),
+        )
+        self.connection.execute(
+            "DELETE FROM ledger_entries WHERE portfolio_id = %s", (portfolio.id,)
+        )
+        for entry in portfolio.ledger:
+            row = self.connection.execute(
+                """
+                INSERT INTO ledger_entries(
+                    portfolio_id, sequence, kind, reference, occurred_at
+                ) VALUES (%s, %s, %s, %s, %s) RETURNING id
+                """,
+                (portfolio.id, entry.sequence, entry.kind, entry.reference,
+                 entry.occurred_at),
+            ).fetchone()
+            for posting in entry.postings:
+                self.connection.execute(
+                    "INSERT INTO ledger_postings(entry_id, account, amount) VALUES (%s, %s, %s)",
+                    (row["id"], posting.account, posting.amount),
+                )
+
+    def list_for_competition(self, competition_id: str) -> list[TradingAccount]:
+        rows = self.connection.execute(
+            "SELECT user_id FROM competition_participants WHERE competition_id = %s ORDER BY joined_at, user_id",
+            (competition_id,),
+        ).fetchall()
+        return [self.get(competition_id, str(item["user_id"])) for item in rows]
+
+    def save_ranking(self, snapshot: RankingSnapshot) -> None:
+        existing = self.connection.execute(
+            "SELECT digest FROM ranking_snapshots WHERE competition_id = %s AND as_of = %s",
+            (snapshot.competition_id, snapshot.as_of),
+        ).fetchone()
+        if existing and existing["digest"] != snapshot.digest:
+            raise ValueError("snapshot de ranking no reproducible")
+        self.connection.execute(
+            """
+            INSERT INTO ranking_snapshots(competition_id, as_of, rows, digest)
+            VALUES (%s, %s, %s, %s) ON CONFLICT (competition_id, as_of) DO NOTHING
+            """,
+            (snapshot.competition_id, snapshot.as_of,
+             Jsonb([row.__dict__ for row in snapshot.rows]), snapshot.digest),
+        )
+
+    def latest_ranking(self, competition_id: str) -> RankingSnapshot | None:
+        row = self.connection.execute(
+            "SELECT * FROM ranking_snapshots WHERE competition_id = %s ORDER BY as_of DESC LIMIT 1",
+            (competition_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        rows = tuple(RankingRow(**item) for item in row["rows"])
+        return RankingSnapshot(competition_id, row["as_of"], rows, row["digest"])
+
+
 class PostgresAudit(_Repository):
     def add(
         self, occurred_at: datetime, actor_id: str | None, action: str,
@@ -488,6 +714,7 @@ class PostgresStore:
         self.memberships = PostgresMemberships(self)
         self.invitations = PostgresInvitations(self)
         self.competitions = PostgresCompetitions(self)
+        self.trading = PostgresTrading(self)
         self.audit = PostgresAudit(self)
 
     @contextmanager

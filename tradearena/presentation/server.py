@@ -8,9 +8,10 @@ from uuid import uuid4
 
 from tradearena.adapters.identity import Auth0IdentityAdapter
 from tradearena.adapters.postgres import PostgresStore
+from tradearena.adapters.market_data import FixtureMarketDataAdapter
 from tradearena.application.services import (
     AccountService, AuthService, CompetitionService, LeagueService,
-    SessionService,
+    SessionService, TradingService,
 )
 from tradearena.presentation.api import Api
 from tradearena.presentation.asgi import create_app
@@ -42,5 +43,6 @@ def create():
         auth,
         os.environ["BFF_SHARED_SECRET"],
         CompetitionService(store, ids),
+        TradingService(store, ids, FixtureMarketDataAdapter()),
     )
     return create_app(dispatcher, store.ready)

@@ -5,18 +5,25 @@ from __future__ import annotations
 import hashlib
 import secrets
 import copy
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Callable
 
 from .models import (
     Competition, CompetitionStatus, CompetitionView, Invitation,
     InvitationStatus, League, LeagueInvitationView, LeagueMemberView, LeagueView,
-    Membership, OwnInvitationView, Profile, Role, User,
+    ExecutionView, Membership, OrderView, OwnInvitationView, PortfolioView,
+    PositionView, Profile, RankingView, Role, TradingAccount, User,
 )
 from tradearena.ports.identity import IdentityAssertion
 from tradearena.ports.store import StoreConflict
 from tradearena.domain.competition import build_rules_snapshot
+from tradearena.domain.ranking import build_ranking
+from tradearena.domain.trading import (
+    Order, OrderSide, OrderStatus, OrderType, Portfolio, TradingEngine,
+)
+from tradearena.domain.money import money, price
 
 
 class ApplicationError(Exception):
@@ -358,6 +365,22 @@ class LeagueService:
                     raise PlanLimitExceeded("la liga Free ya está completa")
                 membership = Membership(league.id, actor_id, invitation.role, now)
                 uow.memberships.save(membership)
+                for competition in uow.competitions.list_for_league(league.id):
+                    if competition.status is CompetitionStatus.ACTIVE \
+                            and competition.rules_snapshot \
+                            and uow.trading.get(competition.id, actor_id) is None:
+                        initial = Decimal(str(
+                            competition.rules_snapshot["rules"]["initial_capital"]
+                        ))
+                        uow.trading.add(TradingAccount(
+                            competition.id, actor_id, now, True,
+                            Portfolio(self._id(), initial),
+                        ))
+                        uow.audit.add(
+                            now, actor_id, "competition.joined_late",
+                            "competition", competition.id,
+                            {"initial_capital": str(money(initial))},
+                        )
                 invitation.status = InvitationStatus.ACCEPTED
                 invitation.accepted_by = actor_id
                 uow.invitations.save(invitation)
@@ -523,6 +546,14 @@ class CompetitionService:
             competition.status = CompetitionStatus.ACTIVE
             competition.started_at = now
             uow.competitions.save(competition)
+            initial_cash = Decimal(str(
+                competition.rules_snapshot["rules"]["initial_capital"]
+            ))
+            for membership in uow.memberships.list_active_for_league(league_id):
+                uow.trading.add(TradingAccount(
+                    competition.id, membership.user_id, now, False,
+                    Portfolio(self._id(), initial_cash),
+                ))
             uow.audit.add(
                 now, actor_id, "competition.started", "competition",
                 competition.id, {"league_id": league_id, "rules_version": "1"},
@@ -551,3 +582,251 @@ class CompetitionService:
             competition.starts_at, competition.ends_at, competition.status,
             copy.deepcopy(competition.rules_snapshot), competition.started_at,
         )
+
+
+class TradingService:
+    """Carteras privadas y ejecución reproducible con mercado inyectado."""
+
+    def __init__(self, store, id_factory: Callable[[], str], market) -> None:
+        self.store = store
+        self._id = id_factory
+        self.market = market
+
+    def portfolio(
+        self, actor_id: str, league_id: str, competition_id: str, now: datetime,
+    ) -> PortfolioView:
+        with self.store.transaction() as uow:
+            competition, account = self._account(
+                uow, actor_id, league_id, competition_id, now, for_update=True,
+            )
+            self._process_available_quotes(account, competition, now)
+            uow.trading.save(account)
+            self._finish_if_ended(uow, competition, actor_id, now)
+            return self._portfolio_view(account, competition, now)
+
+    def submit_order(
+        self, actor_id: str, league_id: str, competition_id: str,
+        symbol: str, side: str, quantity: int, order_type: str,
+        allow_extended_hours: bool, limit_price: str | None, now: datetime,
+        client_order_id: str | None = None,
+    ) -> PortfolioView:
+        with self.store.transaction() as uow:
+            competition, account = self._account(
+                uow, actor_id, league_id, competition_id, now, for_update=True,
+            )
+            self._within_calendar(competition, now)
+            order_id = (
+                f"{account.portfolio.id}-{client_order_id}"
+                if client_order_id else self._id()
+            )
+            existing = account.portfolio.orders.get(order_id)
+            if existing:
+                expected = (
+                    existing.symbol, existing.side.value, existing.quantity,
+                    existing.order_type.value, existing.allow_extended_hours,
+                    str(existing.limit_price) if existing.limit_price is not None else None,
+                )
+                requested = (
+                    symbol.strip().upper(), side, quantity, order_type,
+                    allow_extended_hours,
+                    str(price(limit_price)) if limit_price is not None else None,
+                )
+                if expected != requested:
+                    raise Conflict("la clave idempotente ya pertenece a otra orden")
+            else:
+                order = Order(
+                    order_id, symbol.strip(), OrderSide(side), quantity,
+                    OrderType(order_type), allow_extended_hours, now,
+                    price(limit_price) if limit_price is not None else None,
+                )
+                self._engine(competition).submit(account.portfolio, order)
+                uow.audit.add(
+                    now, actor_id, "order.submitted", "order", order.id,
+                    {"competition_id": competition.id},
+                )
+            self._process_available_quotes(account, competition, now)
+            uow.trading.save(account)
+            return self._portfolio_view(account, competition, now)
+
+    def cancel_order(
+        self, actor_id: str, league_id: str, competition_id: str,
+        order_id: str, now: datetime,
+    ) -> PortfolioView:
+        with self.store.transaction() as uow:
+            competition, account = self._account(
+                uow, actor_id, league_id, competition_id, now, for_update=True,
+            )
+            order = account.portfolio.orders.get(order_id)
+            if not order:
+                raise NotFound("orden no encontrada")
+            try:
+                self._engine(competition).cancel(account.portfolio, order_id)
+            except ValueError as exc:
+                raise Conflict(str(exc)) from exc
+            uow.trading.save(account)
+            uow.audit.add(now, actor_id, "order.cancelled", "order", order_id)
+            return self._portfolio_view(account, competition, now)
+
+    def ranking(
+        self, actor_id: str, league_id: str, competition_id: str, now: datetime,
+    ) -> RankingView:
+        with self.store.transaction() as uow:
+            competition, _ = self._account(
+                uow, actor_id, league_id, competition_id, now, for_update=True,
+            )
+            snapshots = []
+            for account in uow.trading.list_for_competition(competition_id):
+                self._process_available_quotes(account, competition, now)
+                uow.trading.save(account)
+                prices = self._valuation_prices(account, competition, now)
+                snapshots.append((
+                    account.user_id, account.portfolio.snapshot(prices, now),
+                    account.joined_late,
+                ))
+            snapshot = build_ranking(competition_id, now, snapshots)
+            uow.trading.save_ranking(snapshot)
+            self._finish_if_ended(uow, competition, actor_id, now)
+            rows = tuple({
+                "rank": row.rank, "user_id": row.user_id,
+                "portfolio_id": row.portfolio_id,
+                "cumulative_return": row.cumulative_return,
+                "joined_late": row.joined_late,
+                "display_name": self._display_name(uow, row.user_id),
+            } for row in snapshot.rows)
+            return RankingView(competition_id, now, rows, snapshot.digest)
+
+    def _account(
+        self, uow, actor_id: str, league_id: str, competition_id: str,
+        now: datetime, *, for_update: bool,
+    ) -> tuple[Competition, TradingAccount]:
+        membership = LeagueService._membership(uow, actor_id, league_id)
+        competition = uow.competitions.get(competition_id, for_update=for_update)
+        if not competition or competition.league_id != league_id \
+                or competition.status is CompetitionStatus.DRAFT \
+                or not competition.rules_snapshot or not competition.started_at:
+            raise NotFound("competición no encontrada")
+        account = uow.trading.get(competition_id, actor_id, for_update=for_update)
+        if account is None:
+            initial = Decimal(str(
+                competition.rules_snapshot["rules"]["initial_capital"]
+            ))
+            account = TradingAccount(
+                competition_id, actor_id, membership.joined_at, True,
+                Portfolio(self._id(), initial),
+            )
+            uow.trading.add(account)
+            uow.audit.add(
+                now, actor_id, "competition.joined_late", "competition",
+                competition_id, {"initial_capital": str(money(initial))},
+            )
+        return competition, account
+
+    @staticmethod
+    def _within_calendar(competition: Competition, now: datetime) -> None:
+        calendar = competition.rules_snapshot["calendar"]
+        starts_at = datetime.fromisoformat(str(calendar["starts_at"]))
+        ends_at = datetime.fromisoformat(str(calendar["ends_at"]))
+        if competition.status is not CompetitionStatus.ACTIVE \
+                or now < starts_at or now > ends_at:
+            raise Conflict("la competición no admite órdenes en este momento")
+
+    @staticmethod
+    def _engine(competition: Competition) -> TradingEngine:
+        commissions = competition.rules_snapshot["rules"]["commissions"]
+        return TradingEngine(
+            Decimal(str(commissions["regular"])),
+            Decimal(str(commissions["extended"])),
+        )
+
+    def _process_available_quotes(
+        self, account: TradingAccount, competition: Competition, now: datetime,
+    ) -> None:
+        calendar = competition.rules_snapshot["calendar"]
+        starts_at = datetime.fromisoformat(str(calendar["starts_at"]))
+        ends_at = datetime.fromisoformat(str(calendar["ends_at"]))
+        upper = min(now, ends_at)
+        engine = self._engine(competition)
+        symbols = sorted({order.symbol for order in account.portfolio.orders.values()
+                          if order.status is OrderStatus.PENDING})
+        for symbol in symbols:
+            if self.market.definitively_suspended(symbol, upper):
+                for order_id, order in tuple(account.portfolio.orders.items()):
+                    if order.symbol == symbol and order.status is OrderStatus.PENDING:
+                        account.portfolio.orders[order_id] = replace(
+                            order, status=OrderStatus.CANCELLED,
+                            rejection_reason="instrument_suspended",
+                        )
+                continue
+            for quote in sorted(
+                self.market.quotes(symbol, starts_at, upper),
+                key=lambda item: item.observed_at,
+            ):
+                engine.process_quote(account.portfolio, quote)
+        if now >= ends_at:
+            engine.close_pending(account.portfolio, "competition_ended")
+
+    def _valuation_prices(
+        self, account: TradingAccount, competition: Competition, now: datetime,
+    ) -> dict[str, Decimal]:
+        calendar = competition.rules_snapshot["calendar"]
+        starts_at = datetime.fromisoformat(str(calendar["starts_at"]))
+        ends_at = datetime.fromisoformat(str(calendar["ends_at"]))
+        result = {}
+        for symbol in account.portfolio.positions:
+            quotes = sorted(self.market.quotes(symbol, starts_at, min(now, ends_at)),
+                            key=lambda item: item.observed_at)
+            if quotes:
+                result[symbol] = quotes[-1].value
+                continue
+            executions = [item for item in account.portfolio.executions
+                          if item.symbol == symbol]
+            if not executions:
+                raise Conflict(f"no existe cotización para {symbol}")
+            result[symbol] = executions[-1].price
+        return result
+
+    @staticmethod
+    def _finish_if_ended(uow, competition: Competition, actor_id: str, now: datetime) -> None:
+        ends_at = datetime.fromisoformat(str(
+            competition.rules_snapshot["calendar"]["ends_at"]
+        ))
+        if now >= ends_at and competition.status is CompetitionStatus.ACTIVE:
+            competition.status = CompetitionStatus.FINISHED
+            uow.competitions.save(competition)
+            uow.audit.add(
+                now, actor_id, "competition.finished", "competition",
+                competition.id,
+            )
+
+    def _portfolio_view(
+        self, account: TradingAccount, competition: Competition, now: datetime,
+    ) -> PortfolioView:
+        prices = self._valuation_prices(account, competition, now)
+        portfolio = account.portfolio
+        positions = tuple(PositionView(
+            symbol, quantity,
+            str(prices[symbol]) if symbol in prices else None,
+            str(money(prices[symbol] * quantity)) if symbol in prices else None,
+        ) for symbol, quantity in sorted(portfolio.positions.items()))
+        orders = tuple(OrderView(
+            item.id, item.symbol, item.side.value, item.quantity,
+            item.order_type.value, item.allow_extended_hours,
+            str(item.limit_price) if item.limit_price is not None else None,
+            item.status.value, item.rejection_reason, item.submitted_at,
+        ) for item in sorted(portfolio.orders.values(), key=lambda item: (item.submitted_at, item.id)))
+        executions = tuple(ExecutionView(
+            item.id, item.order_id, item.symbol, item.side.value, item.quantity,
+            str(item.price), str(item.commission), item.session.value,
+            item.executed_at,
+        ) for item in sorted(portfolio.executions, key=lambda item: (item.executed_at, item.id)))
+        return PortfolioView(
+            portfolio.id, competition.id, account.user_id, "USD",
+            str(portfolio.initial_cash), str(portfolio.cash), account.joined_at,
+            account.joined_late, positions, orders, executions,
+            str(portfolio.equity(prices)), str(portfolio.cumulative_return(prices)),
+        )
+
+    @staticmethod
+    def _display_name(uow, user_id: str) -> str:
+        profile = uow.profiles.get(user_id)
+        return profile.display_name if profile else user_id
