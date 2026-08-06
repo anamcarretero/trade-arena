@@ -1,6 +1,5 @@
-import Link from "next/link";
-import {LocaleSwitcher} from "@/components/locale-switcher";
 import {MarketPreview} from "@/components/market-preview";
+import {PublicHeader} from "@/components/public-header";
 import {copy, isLocale} from "@/lib/i18n";
 import {notFound} from "next/navigation";
 
@@ -11,7 +10,7 @@ export default async function Landing({params, searchParams}: {params: Promise<{
   const text = copy[locale];
   const authError = Boolean((await searchParams).auth_error);
   return <main className="landing">
-    <header className="topbar"><Link className="wordmark" href={`/${locale}`}>TRADE<span>ARENA</span></Link><LocaleSwitcher locale={locale} /></header>
+    <PublicHeader locale={locale} page="home" />
     <section className="hero">
       <div className="hero-copy">
         <p className="eyebrow">{text.eyebrow}</p>

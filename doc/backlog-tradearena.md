@@ -31,16 +31,16 @@
 2. TA-032 ligas privadas en la PWA: listado, creación y detalle, dos plazas
    Free, invitaciones mediante enlace copiable, aceptación, revocación y
    expulsión con autorización y límites transaccionales en backend.
+3. TA-033 página pública responsive ES/EN de planes: Free disponible con sus
+   límites reales y Friends/Club como «Próximamente», sin pagos ni derechos.
 
 ## Siguiente — Fase 3
 
-1. TA-033 página pública responsive ES/EN de planes: Free disponible y
-   Friends/Club visibles como «Próximamente», sin pagos ni derechos nuevos.
-2. TA-034 competición y confirmación visible de `rules_snapshot`.
-3. TA-035 cartera, orden, historial, ranking y marca de incorporación tardía.
-4. TA-036 centro de notificaciones, exportación y borrado desde la PWA.
-5. TA-037 accesibilidad WCAG 2.2 AA y pruebas E2E de dos participantes.
-6. TA-038 staging reproducible: Vercel, Neon Frankfurt, Cloud Run Frankfurt,
+1. TA-034 competición y confirmación visible de `rules_snapshot`.
+2. TA-035 cartera, orden, historial, ranking y marca de incorporación tardía.
+3. TA-036 centro de notificaciones, exportación y borrado desde la PWA.
+4. TA-037 accesibilidad WCAG 2.2 AA y pruebas E2E de dos participantes.
+5. TA-038 staging reproducible: Vercel, Neon Frankfurt, Cloud Run Frankfurt,
    Secret Manager y GitHub OIDC; ramas Neon efímeras para integración en PR.
 
 ## Fases 4–7

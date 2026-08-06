@@ -1,4 +1,4 @@
-import type {Locale} from "@/lib/i18n";
+import type {Locale} from "../lib/i18n";
 
 export function LocaleSwitcher({locale, suffix = ""}: {locale: Locale; suffix?: string}) {
   const other = locale === "es" ? "en" : "es";

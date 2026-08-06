@@ -7,8 +7,8 @@ Python independiente. Las Fases 0–2 están terminadas: existen reglas v1,
 dominio reproducible, casos de uso de cuentas y ligas, API FastAPI,
 persistencia PostgreSQL, migraciones e imagen OCI verificadas. TA-030 está
 terminado. TA-031 completa acceso, perfil y PWA; TA-032 añade creación de liga,
-invitaciones mediante enlace y administración de miembros. El siguiente bloque
-es TA-033: página pública de planes. Las competiciones pasan a TA-034.
+invitaciones mediante enlace y administración de miembros; TA-033 incorpora la
+página pública de planes. El siguiente bloque es TA-034: competiciones.
 
 ```text
 Next.js PWA/BFF — Vercel

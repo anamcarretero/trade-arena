@@ -23,3 +23,5 @@ web/*.tsbuildinfo
 web/.env*
 !web/.env.example
 web/coverage/
+web/test-results/
+web/playwright-report/
