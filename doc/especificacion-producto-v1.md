@@ -8,15 +8,15 @@ una simulación educativa sin dinero, premios, retiradas ni conexión a bróker.
 
 - La moneda es USD. El efectivo se redondea a 2 decimales y los precios a 4,
   en ambos casos con `ROUND_HALF_EVEN`. No se admiten `float` en el dominio.
-- Solo se aceptan acciones y ETF estadounidenses activos y unidades enteras.
+- Solo se aceptan acciones y ETF estadounidenses activos. Las cantidades son
+  decimales positivas con hasta ocho decimales.
 - Una cartera nace con un único abono de capital virtual. Su retorno es
   `(valor actual / capital inicial) - 1`; el ranking ordena ese porcentaje y
   desempata por el identificador estable del usuario.
 - Cada ejecución crea un asiento inmutable y balanceado. La comisión es 0,99
   USD en sesión regular o 2,99 USD en sesión ampliada.
 - Una orden es de mercado o límite y opta expresamente por sesión regular o
-  por regular más ampliada. Nunca hay ejecución parcial, corto, margen ni
-  cantidad fraccionaria.
+  por regular más ampliada. Nunca hay ejecución parcial, corto ni margen.
 - Una orden de mercado pendiente cruza con la primera cotización elegible. Una
   límite de compra cruza cuando el precio es menor o igual al límite; una de
   venta, cuando es mayor o igual. Sin saldo o posición suficiente se rechaza
@@ -39,8 +39,20 @@ una simulación educativa sin dinero, premios, retiradas ni conexión a bróker.
   no se emite snapshot nuevo. Workers posteriores reintentan idempotentemente.
 - Un dividendo abona `importe por acción × unidades` a quienes posean las
   acciones según el evento normalizado del proveedor. Un *split* multiplica
-  unidades por su razón sin alterar efectivo. Si produce fracción, el evento
-  queda bloqueado para revisión: v1 no liquida fracciones.
+  unidades por su razón sin alterar efectivo. La cantidad resultante conserva
+  como máximo ocho decimales; una precisión superior se bloquea para revisión.
+
+## Ejecuciones simuladas declaradas
+
+- `reported-trades` registra una ejecución ya realizada dentro de la
+  simulación; no importa ni custodia operaciones de un broker. V1 exige USD y
+  FX 1, y conserva fecha, precio, total y comisión para auditoría.
+- El total debe coincidir al céntimo con cantidad × precio y una comisión del
+  snapshot. La ejecución es completa y respeta calendario, incorporación,
+  cronología, saldo, posición, corto y margen.
+- Las ejecuciones del motor se etiquetan `fixture` y las declaradas
+  `reported`. Corregir crea movimientos compensatorios enlazados; una
+  ejecución financiera nunca se edita ni se borra.
 
 ## Competiciones, privacidad y planes
 

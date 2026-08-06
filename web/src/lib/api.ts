@@ -14,6 +14,8 @@ export type ApiRoute = ApiPath
   | `/api/v1/leagues/${string}/competitions/${string}/portfolio`
   | `/api/v1/leagues/${string}/competitions/${string}/orders`
   | `/api/v1/leagues/${string}/competitions/${string}/orders/${string}`
+  | `/api/v1/leagues/${string}/competitions/${string}/reported-trades`
+  | `/api/v1/leagues/${string}/competitions/${string}/reported-trades/${string}/corrections`
   | `/api/v1/leagues/${string}/competitions/${string}/ranking`
   | `/api/v1/invitations/${string}`;
 export type OwnAccount = {

@@ -153,7 +153,7 @@ class TradingAccount:
 @dataclass(frozen=True)
 class PositionView:
     symbol: str
-    quantity: int
+    quantity: str
     price: str | None
     market_value: str | None
 
@@ -163,7 +163,7 @@ class OrderView:
     id: str
     symbol: str
     side: str
-    quantity: int
+    quantity: str
     order_type: str
     allow_extended_hours: bool
     limit_price: str | None
@@ -178,11 +178,16 @@ class ExecutionView:
     order_id: str
     symbol: str
     side: str
-    quantity: int
+    quantity: str
     price: str
     commission: str
     session: str
     executed_at: datetime
+    source: str
+    total_amount: str | None
+    currency: str
+    fx_rate: str
+    correction_of: str | None
 
 
 @dataclass(frozen=True)

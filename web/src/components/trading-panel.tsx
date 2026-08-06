@@ -1,6 +1,8 @@
 import type {Portfolio, Ranking} from "../lib/api";
 import {copy, type Locale} from "../lib/i18n";
-import {cancelOrder, submitOrder} from "../app/[locale]/app/leagues/actions";
+import {
+  cancelOrder, correctReportedTrade, reportTrade, submitOrder
+} from "../app/[locale]/app/leagues/actions";
 
 export function TradingPanel({locale, leagueId, competitionId, portfolio, ranking}: {
   locale: Locale;
@@ -10,6 +12,9 @@ export function TradingPanel({locale, leagueId, competitionId, portfolio, rankin
   ranking: Ranking;
 }) {
   const text = copy[locale];
+  const correctedExecutions = new Set(
+    portfolio.executions.flatMap(execution => execution.correction_of ? [execution.correction_of] : [])
+  );
   return <div className="trading-panel">
     <h3>{text.trading}</h3>
     {portfolio.joined_late && <div className="late-entry" role="status">
@@ -27,11 +32,26 @@ export function TradingPanel({locale, leagueId, competitionId, portfolio, rankin
           <References locale={locale} leagueId={leagueId} competitionId={competitionId}/>
           <label>{text.symbol}<input name="symbol" required maxLength={16} pattern="[A-Za-z][A-Za-z0-9.-]*" autoCapitalize="characters"/></label>
           <label>{text.side}<select name="side"><option value="buy">{text.buy}</option><option value="sell">{text.sell}</option></select></label>
-          <label>{text.shares}<input name="quantity" type="number" min="1" step="1" required/></label>
+          <label>{text.shares}<input name="quantity" type="number" min="0.00000001" step="0.00000001" required/></label>
           <label>{text.orderType}<select name="order_type"><option value="market">{text.marketOrder}</option><option value="limit">{text.limitOrder}</option></select></label>
           <label>{text.limitPrice}<input name="limit_price" inputMode="decimal" pattern="\d+(\.\d{1,4})?"/></label>
           <label className="checkbox-row"><input name="allow_extended_hours" type="checkbox"/>{text.extendedHours}</label>
           <button className="primary" type="submit">{text.submitOrder}<span aria-hidden="true">→</span></button>
+        </form>
+      </section>
+      <section className="trade-card">
+        <h4>{text.reportedTrade}</h4>
+        <p className="empty-copy">{text.reportedTradeIntro}</p>
+        <form action={reportTrade} className="order-form">
+          <References locale={locale} leagueId={leagueId} competitionId={competitionId}/>
+          <label>{text.tradeDate}<input name="date" type="datetime-local" required/></label>
+          <label>{text.symbol}<input name="ticker" required maxLength={16} pattern="[A-Za-z][A-Za-z0-9.-]*" autoCapitalize="characters"/></label>
+          <label>{text.side}<select name="type"><option value="buy">{text.buy}</option><option value="sell">{text.sell}</option></select></label>
+          <label>{text.shares}<input name="quantity" type="number" min="0.00000001" step="0.00000001" required/></label>
+          <label>{text.pricePerShare}<input name="price_per_share" inputMode="decimal" pattern="\d+(\.\d{1,4})?" required/></label>
+          <label>{text.totalAmount}<input name="total_amount" inputMode="decimal" pattern="\d+(\.\d{1,2})?" required/></label>
+          <div className="reported-constants"><span>{text.currency}: <strong>USD</strong></span><span>{text.fxRate}: <strong>1</strong></span></div>
+          <button className="primary" type="submit">{text.reportTrade}<span aria-hidden="true">→</span></button>
         </form>
       </section>
       <section className="trade-card">
@@ -57,7 +77,18 @@ export function TradingPanel({locale, leagueId, competitionId, portfolio, rankin
         <h4>{text.executions}</h4>
         {portfolio.executions.length === 0 ? <p className="empty-copy">{text.noExecutions}</p> :
           <div className="compact-list">{portfolio.executions.map(execution =>
-            <div key={execution.id}><strong>{execution.quantity} {execution.symbol} · {execution.price} USD</strong><span>{text.commission}: {execution.commission} USD · {execution.session}</span></div>)}</div>}
+            <div key={execution.id}><strong>{execution.quantity} {execution.symbol} · {execution.price} USD</strong>
+              <span>{text.commission}: {execution.commission} USD · {execution.session}</span>
+              <span className={`source-pill ${execution.source}`}>{execution.source === "fixture" ? text.fixtureExecution : text.reportedExecution}</span>
+              {execution.correction_of && <span>{text.compensatesExecution}</span>}
+              {correctedExecutions.has(execution.id) && <span>{text.correctedExecution}</span>}
+              {execution.source === "reported" && !execution.correction_of && !correctedExecutions.has(execution.id) &&
+                <form action={correctReportedTrade}>
+                  <References locale={locale} leagueId={leagueId} competitionId={competitionId}/>
+                  <input type="hidden" name="execution_id" value={execution.id}/>
+                  <button className="danger-button" type="submit">{text.correctTrade}</button>
+                </form>}
+            </div>)}</div>}
       </section>
       <section className="trade-card ranking-card">
         <h4>{text.ranking}</h4>

@@ -224,6 +224,51 @@ paths:
         "400": {description: Orden inválida}
         "404": {description: Liga, competición o cartera no accesible}
         "409": {description: Fuera de calendario o clave idempotente en conflicto}
+  /api/v1/leagues/{league_id}/competitions/{competition_id}/reported-trades:
+    post:
+      operationId: reportCompetitionTrade
+      description: Registra una ejecución simulada ya realizada; no envía una orden al mercado.
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+        - {$ref: "#/components/parameters/CompetitionId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ReportedTradeInput"}
+      responses:
+        "201":
+          description: Operación declarada registrada atómicamente y cartera resultante
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Portfolio"}
+        "400": {description: Campos, precisión, USD/FX, total o comisión inválidos}
+        "404": {description: Liga, competición o cartera no accesible}
+        "409": {description: Fecha, cronología, saldo, posición o idempotencia en conflicto}
+  /api/v1/leagues/{league_id}/competitions/{competition_id}/reported-trades/{execution_id}/corrections:
+    post:
+      operationId: correctReportedCompetitionTrade
+      description: Crea un movimiento compensatorio auditable; nunca modifica ni borra la ejecución original.
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+        - {$ref: "#/components/parameters/CompetitionId"}
+        - name: execution_id
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ReportedTradeCorrectionInput"}
+      responses:
+        "201":
+          description: Movimiento compensatorio creado y cartera resultante
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Portfolio"}
+        "404": {description: Liga, competición, cartera u operación no accesible}
+        "409": {description: Corrección duplicada, fecha, saldo o posición incompatibles}
   /api/v1/leagues/{league_id}/competitions/{competition_id}/orders/{order_id}:
     delete:
       operationId: cancelCompetitionOrder
@@ -429,7 +474,7 @@ components:
       properties:
         symbol: {type: string, pattern: '^[A-Za-z][A-Za-z0-9.-]*$', maxLength: 16}
         side: {type: string, enum: [buy, sell]}
-        quantity: {type: integer, minimum: 1}
+        quantity: {type: string, pattern: '^\d+(?:\.\d{1,8})?$'}
         order_type: {type: string, enum: [market, limit]}
         allow_extended_hours: {type: boolean}
         limit_price:
@@ -443,7 +488,7 @@ components:
         id: {type: string}
         symbol: {type: string}
         side: {type: string, enum: [buy, sell]}
-        quantity: {type: integer, minimum: 1}
+        quantity: {type: string, pattern: '^\d+(?:\.\d{1,8})?$'}
         order_type: {type: string, enum: [market, limit]}
         allow_extended_hours: {type: boolean}
         limit_price: {oneOf: [{type: string}, {type: "null"}]}
@@ -452,23 +497,28 @@ components:
         submitted_at: {type: string, format: date-time}
     Execution:
       type: object
-      required: [id, order_id, symbol, side, quantity, price, commission, session, executed_at]
+      required: [id, order_id, symbol, side, quantity, price, commission, session, executed_at, source, total_amount, currency, fx_rate, correction_of]
       properties:
         id: {type: string}
         order_id: {type: string}
         symbol: {type: string}
         side: {type: string, enum: [buy, sell]}
-        quantity: {type: integer, minimum: 1}
+        quantity: {type: string, pattern: '^\d+(?:\.\d{1,8})?$'}
         price: {type: string}
         commission: {type: string}
         session: {type: string, enum: [regular, extended]}
         executed_at: {type: string, format: date-time}
+        source: {type: string, enum: [fixture, reported]}
+        total_amount: {oneOf: [{type: string}, {type: "null"}]}
+        currency: {type: string, enum: [USD]}
+        fx_rate: {type: string}
+        correction_of: {oneOf: [{type: string}, {type: "null"}]}
     Position:
       type: object
       required: [symbol, quantity, price, market_value]
       properties:
         symbol: {type: string}
-        quantity: {type: integer, minimum: 1}
+        quantity: {type: string, pattern: '^\d+(?:\.\d{1,8})?$'}
         price: {oneOf: [{type: string}, {type: "null"}]}
         market_value: {oneOf: [{type: string}, {type: "null"}]}
     Portfolio:
@@ -488,6 +538,27 @@ components:
         executions: {type: array, items: {$ref: "#/components/schemas/Execution"}}
         equity: {type: string}
         cumulative_return: {type: string}
+    ReportedTradeInput:
+      type: object
+      additionalProperties: false
+      required: [date, ticker, type, quantity, price_per_share, total_amount, currency, fx_rate, client_trade_id]
+      properties:
+        date: {type: string, format: date-time}
+        ticker: {type: string, pattern: '^[A-Za-z][A-Za-z0-9.-]*$', maxLength: 16}
+        type: {type: string, enum: [buy, sell]}
+        quantity: {type: string, pattern: '^\d+(?:\.\d{1,8})?$'}
+        price_per_share: {type: string, pattern: '^\d+(?:\.\d{1,4})?$'}
+        total_amount: {type: string, pattern: '^\d+(?:\.\d{1,2})?$'}
+        currency: {type: string, enum: [USD]}
+        fx_rate: {type: string, pattern: '^1(?:\.0{1,8})?$'}
+        client_trade_id: {type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9-]+$'}
+    ReportedTradeCorrectionInput:
+      type: object
+      additionalProperties: false
+      required: [date, client_trade_id]
+      properties:
+        date: {type: string, format: date-time}
+        client_trade_id: {type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9-]+$'}
     RankingRow:
       type: object
       required: [rank, user_id, portfolio_id, display_name, cumulative_return, joined_late]

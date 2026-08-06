@@ -136,6 +136,12 @@ idempotentes opacos. `MemoryStore` y `PostgresStore` reconstruyen el mismo
 agregado Python de cartera —órdenes, ejecuciones y ledger incluidos— y pasan el
 mismo contrato de aplicación.
 
+`migrations/006_fractional_reported_trades.sql` amplía cantidades de órdenes,
+ejecuciones y posiciones a `numeric(28,8)` y añade a cada ejecución su origen,
+importe total declarado, moneda, FX y referencia de compensación. Los datos de
+TA-035 existentes se migran como `source=fixture`; el ledger PostgreSQL pasa a
+ser estrictamente aditivo y verifica que un asiento ya persistido no cambie.
+
 Al crear una liga Free se bloquea la fila del propietario antes de comprobar
 su límite, y el índice parcial mantiene una segunda defensa. Al invitar o
 aceptar se bloquea la liga antes de contar miembros e invitaciones pendientes,
@@ -222,7 +228,8 @@ La expulsión corta el acceso, pero conserva el historial financiero.
 
 `TradingService` es la única frontera de decisiones de cartera. Lee calendario,
 capital y comisiones exclusivamente del snapshot inmutable, entrega el agregado
-al motor Python y persiste el resultado. Acepta acciones enteras, compra/venta,
+al motor Python y persiste el resultado. Acepta cantidades decimales positivas
+de acciones con hasta ocho decimales, compra/venta,
 mercado/límite y sesión regular o ampliada; nunca ejecuta una cotización anterior
 a la orden, no divide ejecuciones y rechaza sin comisión la falta de efectivo o
 posición. Las órdenes permanecen GTC hasta ejecución, cancelación, fin del
@@ -234,6 +241,23 @@ integración licenciada y los jobs de Fase 4. No se consulta Yahoo ni se acepta
 un precio enviado por el navegador. La valoración genera snapshots de cartera
 y ranking porcentual con hash estable, desempate por usuario y marca visible de
 incorporación tardía.
+
+La ampliación de TA-035 añade `.../reported-trades` como caso de uso separado:
+registra una ejecución simulada ya realizada, no una orden pendiente. Recibe
+fecha, ticker, tipo, cantidad, precio por acción, total, moneda, FX y clave
+idempotente. Python valida que la competición siga activa, el timestamp esté
+dentro del calendario de `rules_snapshot`, no sea futuro ni anterior a la
+incorporación y mantenga la cronología de la cartera. V1 exige USD/FX 1 e
+infiere una de las comisiones inmutables comprobando el total al céntimo.
+
+Una declaración válida crea atómicamente orden `filled`, ejecución completa
+`source=reported`, ledger balanceado y auditoría. Las ejecuciones del motor se
+conservan como `source=fixture`. La clave se acota a la cartera y una repetición
+idéntica no duplica historia. `.../reported-trades/{execution_id}/corrections`
+revierte el efecto mediante otra ejecución y asiento compensatorios con
+referencia al original; nunca actualiza ni borra la ejecución financiera.
+Saldo y posición siguen impidiendo margen y corto también durante la
+compensación.
 
 La API añade `.../portfolio`, `.../orders`, cancelación por id y `.../ranking`.
 Todos vuelven a comprobar liga, competición, cartera y orden; un recurso ajeno

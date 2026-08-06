@@ -29,18 +29,32 @@ test("an owner creates and starts a competition with immutable ES/EN confirmatio
   await expect(page.getByRole("definition").filter({hasText: "3000.00 USD"})).toBeVisible();
   await expect(page.getByText("XNYS · America/New_York")).toBeVisible();
   await expect(page.getByRole("heading", {name: "Cartera y órdenes"})).toBeVisible();
-  await page.getByLabel("Símbolo").fill("AAPL");
-  await page.getByLabel("Acciones enteras").fill("2");
+  const orderForm = page.getByRole("heading", {name: "Nueva orden"}).locator("..");
+  await orderForm.getByLabel("Símbolo").fill("AAPL");
+  await orderForm.getByLabel("Cantidad (hasta 8 decimales)").fill("2");
   await page.getByRole("button", {name: /Enviar orden/}).click();
   await expect(page.getByText("Orden enviada.")).toBeVisible();
   await expect(page.getByText("2799.01 USD")).toBeVisible();
-  await expect(page.getByText("Ejecutada")).toBeVisible();
+  await expect(page.getByText("Ejecutada", {exact: true})).toBeVisible();
+  await expect(page.getByText("Ejecutada por fixture de mercado")).toBeVisible();
+
+  const reportedForm = page.getByRole("heading", {name: "Registrar operación ya realizada"}).locator("..");
+  await reportedForm.getByLabel("Fecha y hora (UTC)").fill("2026-09-03T15:00");
+  await reportedForm.getByLabel("Símbolo").fill("AAPL");
+  await reportedForm.getByLabel("Cantidad (hasta 8 decimales)").fill("0.5");
+  await reportedForm.getByLabel("Precio por acción (USD)").fill("50");
+  await reportedForm.getByLabel("Importe total (USD)").fill("25.99");
+  await reportedForm.getByRole("button", {name: /Registrar operación/}).click();
+  await expect(page.getByText("Operación declarada registrada")).toBeVisible();
+  await expect(page.getByText("Declarada por el usuario")).toBeVisible();
+  await expect(page.getByText("2773.02 USD")).toBeVisible();
   await expect(page.getByRole("strong").filter({hasText: "Member E2E"})).toBeVisible();
   await expect(page.getByText("Incorporación tardía", {exact: true})).toBeVisible();
   await page.getByRole("link", {name: "EN", exact: true}).click();
   await expect(page.getByText("Calendar and rules copied immutably")).toBeVisible();
   await expect(page.getByText("This competition will not change when the general rules are updated.")).toBeVisible();
   await expect(page.getByRole("heading", {name: "Portfolio and orders"})).toBeVisible();
+  await expect(page.getByText("Reported by the user")).toBeVisible();
   await expect(page.getByText("Late entry", {exact: true})).toBeVisible();
   await page.setViewportSize({width: 375, height: 812});
   const noHorizontalScroll = await page.evaluate(

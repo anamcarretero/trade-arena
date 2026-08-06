@@ -166,6 +166,76 @@ def test_fastapi_exposes_portfolio_orders_history_and_ranking():
     assert ranking.json()["rows"][0]["cumulative_return"] == "0E-12"
 
 
+def test_fastapi_reports_fractional_trades_and_compensating_corrections():
+    client, token = build_client()
+    headers = {"Authorization": f"Bearer {token}"}
+    league_id = client.post(
+        "/api/v1/leagues", headers=headers, json={"name": "Reported"}
+    ).json()["id"]
+    competition = client.post(
+        f"/api/v1/leagues/{league_id}/competitions", headers=headers,
+        json={
+            "name": "Actual", "starts_at": NOW.isoformat(),
+            "ends_at": (NOW + timedelta(days=7)).isoformat(),
+        },
+    ).json()
+    client.post(
+        f"/api/v1/leagues/{league_id}/competitions/{competition['id']}/start",
+        headers=headers,
+    )
+    base = f"/api/v1/leagues/{league_id}/competitions/{competition['id']}"
+    payload = {
+        "date": NOW.isoformat(), "ticker": "AAPL", "type": "buy",
+        "quantity": "0.5", "price_per_share": "100",
+        "total_amount": "50.99", "currency": "USD", "fx_rate": "1",
+        "client_trade_id": "reported-api",
+    }
+    created = client.post(f"{base}/reported-trades", headers=headers, json=payload)
+    assert created.status_code == 201
+    assert created.json()["executions"][0]["source"] == "reported"
+    assert created.json()["positions"][0]["quantity"] == "0.5"
+    assert len(client.post(
+        f"{base}/reported-trades", headers=headers, json=payload
+    ).json()["executions"]) == 1
+
+    execution_id = created.json()["executions"][0]["id"]
+    correction = client.post(
+        f"{base}/reported-trades/{execution_id}/corrections", headers=headers,
+        json={"date": NOW.isoformat(), "client_trade_id": "correction-api"},
+    )
+    assert correction.status_code == 201
+    assert correction.json()["cash"] == "3000.00"
+    assert any(item["correction_of"] == execution_id
+               for item in correction.json()["executions"])
+
+
+def test_reported_trade_contract_rejects_excess_precision_and_non_usd():
+    client, token = build_client()
+    headers = {"Authorization": f"Bearer {token}"}
+    invalid = client.post(
+        "/api/v1/leagues/foreign/competitions/foreign/reported-trades",
+        headers=headers,
+        json={
+            "date": NOW.isoformat(), "ticker": "AAPL", "type": "buy",
+            "quantity": "0.123456789", "price_per_share": "100",
+            "total_amount": "13.34", "currency": "EUR", "fx_rate": "1.1",
+            "client_trade_id": "bad",
+        },
+    )
+    assert invalid.status_code == 400
+    hidden = client.post(
+        "/api/v1/leagues/foreign/competitions/foreign/reported-trades",
+        headers=headers,
+        json={
+            "date": NOW.isoformat(), "ticker": "AAPL", "type": "buy",
+            "quantity": "0.5", "price_per_share": "100",
+            "total_amount": "50.99", "currency": "USD", "fx_rate": "1",
+            "client_trade_id": "hidden",
+        },
+    )
+    assert hidden.status_code == 404
+
+
 def test_fastapi_routes_match_canonical_openapi_operation_ids():
     client, _ = build_client()
     generated = client.get("/openapi.json").json()

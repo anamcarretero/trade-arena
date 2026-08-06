@@ -230,6 +230,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/leagues/{league_id}/competitions/{competition_id}/reported-trades": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Registra una ejecución simulada ya realizada; no envía una orden al mercado. */
+        post: operations["reportCompetitionTrade"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leagues/{league_id}/competitions/{competition_id}/reported-trades/{execution_id}/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Crea un movimiento compensatorio auditable; nunca modifica ni borra la ejecución original. */
+        post: operations["correctReportedCompetitionTrade"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/leagues/{league_id}/competitions/{competition_id}/orders/{order_id}": {
         parameters: {
             query?: never;
@@ -424,7 +458,7 @@ export interface components {
             symbol: string;
             /** @enum {string} */
             side: "buy" | "sell";
-            quantity: number;
+            quantity: string;
             /** @enum {string} */
             order_type: "market" | "limit";
             allow_extended_hours: boolean;
@@ -436,7 +470,7 @@ export interface components {
             symbol: string;
             /** @enum {string} */
             side: "buy" | "sell";
-            quantity: number;
+            quantity: string;
             /** @enum {string} */
             order_type: "market" | "limit";
             allow_extended_hours: boolean;
@@ -453,17 +487,24 @@ export interface components {
             symbol: string;
             /** @enum {string} */
             side: "buy" | "sell";
-            quantity: number;
+            quantity: string;
             price: string;
             commission: string;
             /** @enum {string} */
             session: "regular" | "extended";
             /** Format: date-time */
             executed_at: string;
+            /** @enum {string} */
+            source: "fixture" | "reported";
+            total_amount: string | null;
+            /** @enum {string} */
+            currency: "USD";
+            fx_rate: string;
+            correction_of: string | null;
         };
         Position: {
             symbol: string;
-            quantity: number;
+            quantity: string;
             price: string | null;
             market_value: string | null;
         };
@@ -483,6 +524,25 @@ export interface components {
             executions: components["schemas"]["Execution"][];
             equity: string;
             cumulative_return: string;
+        };
+        ReportedTradeInput: {
+            /** Format: date-time */
+            date: string;
+            ticker: string;
+            /** @enum {string} */
+            type: "buy" | "sell";
+            quantity: string;
+            price_per_share: string;
+            total_amount: string;
+            /** @enum {string} */
+            currency: "USD";
+            fx_rate: string;
+            client_trade_id: string;
+        };
+        ReportedTradeCorrectionInput: {
+            /** Format: date-time */
+            date: string;
+            client_trade_id: string;
         };
         RankingRow: {
             rank: number;
@@ -995,6 +1055,96 @@ export interface operations {
                 content?: never;
             };
             /** @description Fuera de calendario o clave idempotente en conflicto */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reportCompetitionTrade: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                league_id: components["parameters"]["LeagueId"];
+                competition_id: components["parameters"]["CompetitionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportedTradeInput"];
+            };
+        };
+        responses: {
+            /** @description Operación declarada registrada atómicamente y cartera resultante */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Portfolio"];
+                };
+            };
+            /** @description Campos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Liga */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fecha */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    correctReportedCompetitionTrade: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                league_id: components["parameters"]["LeagueId"];
+                competition_id: components["parameters"]["CompetitionId"];
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportedTradeCorrectionInput"];
+            };
+        };
+        responses: {
+            /** @description Movimiento compensatorio creado y cartera resultante */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Portfolio"];
+                };
+            };
+            /** @description Liga */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corrección duplicada */
             409: {
                 headers: {
                     [name: string]: unknown;

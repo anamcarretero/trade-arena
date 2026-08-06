@@ -130,8 +130,21 @@ def test_float_money_is_rejected_to_avoid_platform_rounding():
         Portfolio("p1", 1000.0)
 
 
-def test_fractional_shares_are_rejected_by_the_domain():
-    with pytest.raises(ValueError, match="entero positivo"):
+def test_fractional_shares_up_to_eight_decimals_execute_completely():
+    portfolio = Portfolio("p1", Decimal("1000"))
+    engine = TradingEngine()
+    engine.submit(portfolio, order(quantity=Decimal("0.12345678")))
+    execution, = engine.process_quote(portfolio, quote("100"))
+
+    assert execution.quantity == Decimal("0.12345678")
+    assert portfolio.positions["AAPL"] == Decimal("0.12345678")
+    assert portfolio.cash == Decimal("986.66")
+
+
+def test_fractional_shares_reject_more_than_eight_decimals_and_float_input():
+    with pytest.raises(ValueError, match="ocho decimales"):
+        order(quantity=Decimal("0.123456789"))
+    with pytest.raises(TypeError, match="float"):
         order(quantity=1.5)
 
 

@@ -2183,6 +2183,17 @@ a {
   min-height: auto;
 }
 
+.reported-constants {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 1rem;
+  padding: .65rem .75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: .82rem;
+}
+
 .compact-list,
 .history-list {
   display: grid;
@@ -2197,6 +2208,20 @@ a {
   padding-bottom: .65rem;
   border-bottom: 1px solid var(--line);
 }
+
+.compact-list > div {
+  flex-wrap: wrap;
+}
+
+.source-pill {
+  width: fit-content;
+  padding: .25rem .5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.source-pill.fixture { color: #8db7ff; }
+.source-pill.reported { color: #d99d42; }
 
 .compact-list strong,
 .compact-list span,
@@ -2261,7 +2286,8 @@ a {
   }
 
   .wide-card,
-  .checkbox-row {
+  .checkbox-row,
+  .reported-constants {
     grid-column: auto;
   }
 

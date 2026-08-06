@@ -99,7 +99,8 @@ createServer(async (request, response) => {
       id: `execution-${order.id}`, order_id: order.id, symbol: order.symbol,
       side: order.side, quantity: order.quantity, price: "100.0000",
       commission: "0.99", session: "regular",
-      executed_at: "2026-09-02T14:31:00Z"
+      executed_at: "2026-09-02T14:31:00Z", source: "fixture",
+      total_amount: null, currency: "USD", fx_rate: "1", correction_of: null
     });
     portfolio.cash = "2799.01";
     portfolio.equity = "2999.01";
@@ -107,6 +108,34 @@ createServer(async (request, response) => {
     portfolio.positions = [{
       symbol: order.symbol, quantity: order.quantity,
       price: "100.0000", market_value: "200.00"
+    }];
+    return json(response, 201, portfolio);
+  }
+  const reportedRoute = path.match(/^\/api\/v1\/leagues\/league-e2e\/competitions\/([^/]+)\/reported-trades$/);
+  if (request.method === "POST" && reportedRoute) {
+    const portfolio = portfolios.get(reportedRoute[1]);
+    if (!portfolio) return json(response, 404, {error: "not_found"});
+    const input = await body(request);
+    const order = {
+      id: `reported-${input.client_trade_id}`, symbol: input.ticker,
+      side: input.type, quantity: input.quantity, order_type: "market",
+      allow_extended_hours: false, limit_price: null, status: "filled",
+      rejection_reason: null, submitted_at: input.date
+    };
+    portfolio.orders.push(order);
+    portfolio.executions.push({
+      id: `execution-${order.id}`, order_id: order.id, symbol: order.symbol,
+      side: order.side, quantity: order.quantity, price: "50.0000",
+      commission: "0.99", session: "regular", executed_at: input.date,
+      source: "reported", total_amount: input.total_amount,
+      currency: "USD", fx_rate: "1", correction_of: null
+    });
+    portfolio.cash = "2773.02";
+    portfolio.equity = "3023.02";
+    portfolio.cumulative_return = "0.007673333333";
+    portfolio.positions = [{
+      symbol: order.symbol, quantity: "2.5",
+      price: "100.0000", market_value: "250.00"
     }];
     return json(response, 201, portfolio);
   }

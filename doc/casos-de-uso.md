@@ -127,7 +127,8 @@ TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
 2. Si una persona acepta la invitación después del inicio, membresía,
    participación y cartera se crean en la misma transacción. Recibe los
    `3000.00 USD` completos y aparece con «Incorporación tardía»/«Late entry».
-3. La PWA envía una compra o venta de acciones enteras, de mercado o límite,
+3. La PWA envía una compra o venta de una cantidad positiva con hasta ocho
+   decimales, de mercado o límite,
    para sesión regular o regular más ampliada. La Server Action transmite los
    campos y una clave idempotente; FastAPI vuelve a validar sesión,
    pertenencia, calendario y reglas.
@@ -136,7 +137,7 @@ TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
    siempre cubre toda la cantidad y carga `0.99 USD` en regular o `2.99 USD` en
    ampliada, según el snapshot.
 5. Si falta efectivo o posición, la orden se rechaza sin ejecución ni comisión.
-   No existe fracción, corto, margen ni ejecución parcial. Una orden pendiente
+   No existe corto, margen ni ejecución parcial. Una orden pendiente
    es GTC hasta ejecución, cancelación, fin o suspensión definitiva.
 6. La cartera devuelve efectivo, posiciones, valoración, retorno, órdenes y
    ejecuciones. El ranking reproduce las carteras con los mismos fixtures,
@@ -144,6 +145,30 @@ TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
 7. Una liga, competición, cartera u orden ajena responde `404`. Expulsar corta
    el acceso, pero conserva participación, órdenes, ejecuciones y ledger. El
    navegador no recibe sesión interna, tokens, secretos ni credenciales.
+
+### Operaciones declaradas y correcciones de la ampliación TA-035
+
+1. Un participante registra desde la PWA una ejecución simulada ya realizada
+   mediante fecha/hora UTC, ticker, compra/venta, cantidad de hasta ocho
+   decimales, precio por acción, importe total, USD, FX 1 y clave idempotente.
+   No se crea primero una orden pendiente ni se envía nada al mercado.
+2. FastAPI vuelve a autenticar y Python oculta con `404` ligas, competiciones,
+   carteras u operaciones ajenas. La competición debe estar activa; la fecha no
+   puede ser futura, queda dentro del calendario fijado, no precede a la
+   incorporación y no retrocede respecto a la última ejecución de la cartera.
+3. El backend redondea el bruto al céntimo y exige que el total sea cantidad ×
+   precio más una comisión del snapshot para compra, o menos esa comisión para
+   venta. USD/FX 1, saldo y posición se validan antes de mutar nada.
+4. El éxito persiste en la misma transacción una orden ya `filled`, ejecución
+   completa `source=reported`, ledger balanceado y auditoría. Repetir la misma
+   clave y payload devuelve la cartera existente sin duplicar ningún registro.
+5. El historial etiqueta `fixture` para ejecuciones de mercado y `reported`
+   para declaraciones del usuario. TypeScript presenta esos datos pero no
+   calcula comisiones, totales, saldo, posición ni rentabilidad.
+6. Corregir una declaración crea una orden, ejecución y asiento inversos con
+   `correction_of`; el original permanece visible. Una operación ya compensada
+   no admite una segunda corrección, y nunca existe edición o borrado
+   destructivo del historial financiero.
 
 TA-035 no incorpora notificaciones, exportación o borrado desde la PWA,
 facturación, Stripe, mercado licenciado, jobs programados ni staging.

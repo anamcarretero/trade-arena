@@ -10,9 +10,9 @@ terminado. TA-031 completa acceso, perfil y PWA; TA-032 añade creación de liga
 invitaciones mediante enlace y administración de miembros; TA-033 incorpora la
 página pública de planes y TA-034 la creación e inicio de competiciones con
 `rules_snapshot` inmutable y TA-035 completa cartera, órdenes, ejecución con
-fixtures, historial, ranking e incorporación tardía. La siguiente entrega es
-una ampliación de TA-035 para cantidades fraccionadas y registro manual de
-ejecuciones simuladas; TA-036–TA-037 comienza después.
+fixtures, historial, ranking e incorporación tardía, incluida su ampliación de
+cantidades fraccionadas, ejecuciones simuladas declaradas y correcciones
+compensatorias. La siguiente entrega es TA-036.
 
 ```text
 Next.js PWA/BFF — Vercel
@@ -154,6 +154,9 @@ tarea introduzca Stripe, suscripciones ni permisos de pago.
 deterministas y obtienen el mismo ranking reproducible.
 
 ### Ampliación TA-035 — fracciones y ejecuciones registradas manualmente
+
+**Estado:** completada con la migración 006, API/BFF/PWA bilingüe y pruebas
+reproducibles en memoria y PostgreSQL 16.
 
 1. Sustituir cantidades enteras por cantidades decimales positivas de hasta
    ocho decimales en dominio, aplicación, puertos, MemoryStore, PostgresStore,
@@ -314,17 +317,8 @@ Secuencia recomendada:
 Cada `/goal` debe expresar resultado, límites y verificación, y referenciar
 este documento en vez de copiar toda la especificación. TA-032 conserva los
 artefactos de instalación, el BFF y el sistema visual de TA-031. El siguiente
-objetivo es la ampliación TA-035 de cantidades fraccionadas y ejecuciones
-registradas manualmente. No activa notificaciones, exportación, borrado desde
+objetivo es TA-036. No activa notificaciones, exportación, borrado desde
 la PWA, importación de brokers, Friends, Club ni facturación.
-
-```text
-/goal Amplía TA-035 conforme a doc/plan-ejecucion-tradearena.md: cantidades de
-acciones enteras o fraccionadas y registro manual de ejecuciones simuladas con
-ledger, idempotencia, historial y ranking reproducibles. Conserva reglas en
-Python, autorización 404, sesiones HttpOnly y USD/FX 1, sin importar datos de
-brokers, notificaciones, borrado, facturación ni Stripe.
-```
 
 ## 6. Supuestos y puertas
 

@@ -17,7 +17,7 @@ from tradearena.application.models import (
 )
 from tradearena.domain.ranking import RankingRow, RankingSnapshot
 from tradearena.domain.trading import (
-    Execution, JournalEntry, Order, OrderSide, OrderStatus, OrderType,
+    Execution, ExecutionSource, JournalEntry, Order, OrderSide, OrderStatus, OrderType,
     Portfolio, Posting, Session,
 )
 from tradearena.ports.store import StoreConflict
@@ -521,6 +521,8 @@ class PostgresTrading(_Repository):
             str(item["id"]), str(item["order_id"]), item["symbol"],
             OrderSide(item["side"]), item["quantity"], item["price"],
             item["commission"], item["executed_at"], Session(item["session"]),
+            ExecutionSource(item["source"]), item["total_amount"],
+            item["currency"].strip(), item["fx_rate"], item["correction_of"],
         ) for item in execution_rows]
         entry_rows = self.connection.execute(
             """
@@ -616,34 +618,83 @@ class PostgresTrading(_Repository):
                  order.submitted_at, order.rejection_reason),
             )
         for execution in portfolio.executions:
+            existing = self.connection.execute(
+                """
+                SELECT e.*, i.symbol, o.side FROM executions e
+                  JOIN orders o ON o.id = e.order_id
+                  JOIN instruments i ON i.id = o.instrument_id
+                 WHERE e.order_id = %s
+                """,
+                (execution.order_id,),
+            ).fetchone()
+            if existing is not None:
+                stored = Execution(
+                    str(existing["id"]), str(existing["order_id"]),
+                    existing["symbol"], OrderSide(existing["side"]),
+                    existing["quantity"], existing["price"],
+                    existing["commission"], existing["executed_at"],
+                    Session(existing["session"]),
+                    ExecutionSource(existing["source"]), existing["total_amount"],
+                    existing["currency"].strip(), existing["fx_rate"],
+                    existing["correction_of"],
+                )
+                if stored != execution:
+                    raise ValueError("las ejecuciones financieras son inmutables")
+                continue
             self.connection.execute(
                 """
                 INSERT INTO executions(
-                    id, order_id, quantity, price, commission, session, executed_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    id, order_id, quantity, price, commission, session, executed_at,
+                    source, total_amount, currency, fx_rate, correction_of
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (order_id) DO NOTHING
                 """,
                 (execution.id, execution.order_id, execution.quantity,
                  execution.price, execution.commission, execution.session.value,
-                 execution.executed_at),
+                 execution.executed_at, execution.source.value,
+                 execution.total_amount, execution.currency, execution.fx_rate,
+                 execution.correction_of),
             )
-        self.connection.execute(
-            "DELETE FROM ledger_postings WHERE entry_id IN (SELECT id FROM ledger_entries WHERE portfolio_id = %s)",
-            (portfolio.id,),
-        )
-        self.connection.execute(
-            "DELETE FROM ledger_entries WHERE portfolio_id = %s", (portfolio.id,)
-        )
         for entry in portfolio.ledger:
             row = self.connection.execute(
                 """
                 INSERT INTO ledger_entries(
                     portfolio_id, sequence, kind, reference, occurred_at
-                ) VALUES (%s, %s, %s, %s, %s) RETURNING id
+                ) VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (portfolio_id, sequence) DO NOTHING
+                RETURNING id
                 """,
                 (portfolio.id, entry.sequence, entry.kind, entry.reference,
                  entry.occurred_at),
             ).fetchone()
+            if row is None:
+                existing = self.connection.execute(
+                    """
+                    SELECT id, kind, reference, occurred_at
+                      FROM ledger_entries
+                     WHERE portfolio_id = %s AND sequence = %s
+                    """,
+                    (portfolio.id, entry.sequence),
+                ).fetchone()
+                postings = self.connection.execute(
+                    """
+                    SELECT account, amount FROM ledger_postings
+                     WHERE entry_id = %s ORDER BY id
+                    """,
+                    (existing["id"],),
+                ).fetchall()
+                stored = tuple(
+                    Posting(item["account"], item["amount"]) for item in postings
+                )
+                if (
+                    existing["kind"], existing["reference"],
+                    existing["occurred_at"], stored,
+                ) != (
+                    entry.kind, entry.reference, entry.occurred_at,
+                    entry.postings,
+                ):
+                    raise ValueError("el ledger persistido es inmutable")
+                continue
             for posting in entry.postings:
                 self.connection.execute(
                     "INSERT INTO ledger_postings(entry_id, account, amount) VALUES (%s, %s, %s)",

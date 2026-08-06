@@ -242,7 +242,28 @@ class MemoryTrading:
         self.store._trading[key] = copy.deepcopy(account)
 
     def save(self, account: TradingAccount) -> None:
-        self.store._trading[(account.competition_id, account.user_id)] = copy.deepcopy(account)
+        key = (account.competition_id, account.user_id)
+        current = self.store._trading.get(key)
+        if current:
+            old = current.portfolio
+            new = account.portfolio
+            if new.executions[:len(old.executions)] != old.executions \
+                    or new.ledger[:len(old.ledger)] != old.ledger:
+                raise ValueError("el historial financiero es inmutable")
+            for order_id, order in old.orders.items():
+                candidate = new.orders.get(order_id)
+                if candidate is None or (
+                    candidate.id, candidate.symbol, candidate.side,
+                    candidate.quantity, candidate.order_type,
+                    candidate.allow_extended_hours, candidate.submitted_at,
+                    candidate.limit_price,
+                ) != (
+                    order.id, order.symbol, order.side, order.quantity,
+                    order.order_type, order.allow_extended_hours,
+                    order.submitted_at, order.limit_price,
+                ):
+                    raise ValueError("las órdenes financieras son inmutables")
+        self.store._trading[key] = copy.deepcopy(account)
 
     def list_for_competition(self, competition_id: str) -> list[TradingAccount]:
         return sorted(

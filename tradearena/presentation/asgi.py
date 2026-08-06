@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import date, datetime
+from decimal import Decimal
 
 from fastapi import Depends, FastAPI, Header, Security
 from fastapi.exceptions import RequestValidationError
@@ -48,13 +49,38 @@ class OrderInput(BaseModel):
 
     symbol: str = Field(min_length=1, max_length=16, pattern=r"^[A-Za-z][A-Za-z0-9.-]*$")
     side: str = Field(pattern=r"^(buy|sell)$")
-    quantity: int = Field(gt=0)
+    quantity: Decimal = Field(gt=0, decimal_places=8)
     order_type: str = Field(pattern=r"^(market|limit)$")
     allow_extended_hours: bool = False
     limit_price: str | None = None
     client_order_id: str | None = Field(
         default=None, min_length=1, max_length=64,
         pattern=r"^[A-Za-z0-9-]+$",
+    )
+
+
+class ReportedTradeInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    date: datetime
+    ticker: str = Field(min_length=1, max_length=16, pattern=r"^[A-Za-z][A-Za-z0-9.-]*$")
+    type: str = Field(pattern=r"^(buy|sell)$")
+    quantity: Decimal = Field(gt=0, decimal_places=8)
+    price_per_share: str = Field(pattern=r"^\d+(?:\.\d{1,4})?$")
+    total_amount: str = Field(pattern=r"^\d+(?:\.\d{1,2})?$")
+    currency: str = Field(pattern=r"^[A-Za-z]{3}$")
+    fx_rate: str = Field(pattern=r"^\d+(?:\.\d{1,8})?$")
+    client_trade_id: str = Field(
+        min_length=1, max_length=64, pattern=r"^[A-Za-z0-9-]+$"
+    )
+
+
+class ReportedTradeCorrectionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    date: datetime
+    client_trade_id: str = Field(
+        min_length=1, max_length=64, pattern=r"^[A-Za-z0-9-]+$"
     )
 
 
@@ -231,6 +257,35 @@ def create_app(api: Api, readiness: Callable[[], bool] | None = None) -> FastAPI
         return _response(api.handle(
             "POST",
             f"/api/v1/leagues/{league_id}/competitions/{competition_id}/orders",
+            token, data.model_dump(mode="json"),
+        ))
+
+    @app.post(
+        "/api/v1/leagues/{league_id}/competitions/{competition_id}/reported-trades",
+        operation_id="reportCompetitionTrade",
+    )
+    def report_competition_trade(
+        league_id: str, competition_id: str, data: ReportedTradeInput,
+        token: str | None = Depends(_token),
+    ):
+        return _response(api.handle(
+            "POST",
+            f"/api/v1/leagues/{league_id}/competitions/{competition_id}/reported-trades",
+            token, data.model_dump(mode="json"),
+        ))
+
+    @app.post(
+        "/api/v1/leagues/{league_id}/competitions/{competition_id}/reported-trades/{execution_id}/corrections",
+        operation_id="correctReportedCompetitionTrade",
+    )
+    def correct_reported_competition_trade(
+        league_id: str, competition_id: str, execution_id: str,
+        data: ReportedTradeCorrectionInput,
+        token: str | None = Depends(_token),
+    ):
+        return _response(api.handle(
+            "POST",
+            f"/api/v1/leagues/{league_id}/competitions/{competition_id}/reported-trades/{execution_id}/corrections",
             token, data.model_dump(mode="json"),
         ))
 

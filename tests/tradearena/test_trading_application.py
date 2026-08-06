@@ -74,7 +74,8 @@ def test_order_execution_history_ledger_and_idempotency(context):
         owner.id, league.id, competition.id, T0 + timedelta(minutes=3)
     )
     assert filled.cash == "2797.01"
-    assert filled.positions[0].quantity == 2
+    assert filled.positions[0].quantity == "2"
+    assert filled.executions[0].source == "fixture"
     assert filled.executions[0].price == "101.0000"
     assert filled.executions[0].commission == "0.99"
 
@@ -100,6 +101,103 @@ def test_idempotency_keys_are_scoped_to_each_portfolio(context):
         False, "1", T0 + timedelta(minutes=1), "same-key",
     )
     assert first.orders[0].id != second.orders[0].id
+
+
+def test_reported_fractional_trade_is_atomic_idempotent_and_auditable(context):
+    store, _, owner, _, league, competition, trading = context
+    occurred_at = T0 + timedelta(minutes=1)
+    result = trading.report_trade(
+        owner.id, league.id, competition.id, occurred_at=occurred_at,
+        symbol="aapl", side="buy", quantity_value="0.12345678",
+        price_per_share="100", total_amount="13.34", currency="usd",
+        fx_rate="1.00000000", client_trade_id="reported-1",
+        now=occurred_at,
+    )
+    assert result.cash == "2986.66"
+    assert result.positions[0].quantity == "0.12345678"
+    assert result.executions[0].source == "reported"
+    assert result.executions[0].total_amount == "13.34"
+
+    repeated = trading.report_trade(
+        owner.id, league.id, competition.id, occurred_at=occurred_at,
+        symbol="AAPL", side="buy", quantity_value="0.12345678",
+        price_per_share="100.0000", total_amount="13.34", currency="USD",
+        fx_rate="1", client_trade_id="reported-1", now=occurred_at,
+    )
+    assert len(repeated.orders) == len(repeated.executions) == 1
+    with store.transaction() as uow:
+        account = uow.trading.get(competition.id, owner.id)
+        assert len(account.portfolio.ledger) == 2
+        assert all(sum(posting.amount for posting in entry.postings) == 0
+                   for entry in account.portfolio.ledger)
+        assert any(event.action == "reported_trade.created"
+                   for event in store._audit)
+
+
+def test_reported_trade_validates_total_chronology_cash_position_and_usd(context):
+    _, _, owner, _, league, competition, trading = context
+    occurred_at = T0 + timedelta(minutes=1)
+    common = dict(
+        actor_id=owner.id, league_id=league.id,
+        competition_id=competition.id, occurred_at=occurred_at,
+        symbol="AAPL", side="buy", quantity_value="1",
+        price_per_share="100", total_amount="100.99", currency="USD",
+        fx_rate="1", client_trade_id="valid", now=occurred_at,
+    )
+    trading.report_trade(**common)
+    with pytest.raises(Conflict, match="cronológicamente"):
+        trading.report_trade(**{
+            **common, "occurred_at": T0 + timedelta(seconds=1),
+            "client_trade_id": "old", "now": occurred_at,
+        })
+    with pytest.raises(Exception, match="USD"):
+        trading.report_trade(**{
+            **common, "currency": "EUR", "client_trade_id": "eur",
+        })
+    with pytest.raises(Exception, match="total"):
+        trading.report_trade(**{
+            **common, "total_amount": "100.98", "client_trade_id": "bad-total",
+        })
+    with pytest.raises(Conflict, match="posición"):
+        trading.report_trade(**{
+            **common, "side": "sell", "quantity_value": "2",
+            "total_amount": "199.01", "client_trade_id": "short",
+            "occurred_at": T0 + timedelta(minutes=2),
+            "now": T0 + timedelta(minutes=2),
+        })
+
+
+def test_reported_trade_correction_is_compensating_not_destructive(context):
+    store, _, owner, member, league, competition, trading = context
+    first_at = T0 + timedelta(minutes=1)
+    result = trading.report_trade(
+        owner.id, league.id, competition.id, occurred_at=first_at,
+        symbol="AAPL", side="buy", quantity_value="0.5",
+        price_per_share="100", total_amount="50.99", currency="USD",
+        fx_rate="1", client_trade_id="mistake", now=first_at,
+    )
+    original_id = result.executions[0].id
+    corrected_at = T0 + timedelta(minutes=2)
+    with pytest.raises(NotFound):
+        trading.correct_reported_trade(
+            member.id, league.id, competition.id, original_id,
+            occurred_at=corrected_at, client_trade_id="foreign-correction",
+            now=corrected_at,
+        )
+    corrected = trading.correct_reported_trade(
+        owner.id, league.id, competition.id, original_id,
+        occurred_at=corrected_at, client_trade_id="undo-mistake",
+        now=corrected_at,
+    )
+    assert corrected.cash == "3000.00"
+    assert corrected.positions == ()
+    assert len(corrected.executions) == 2
+    assert corrected.executions[1].correction_of == original_id
+    with store.transaction() as uow:
+        account = uow.trading.get(competition.id, owner.id)
+        assert {entry.kind for entry in account.portfolio.ledger} == {
+            "initial_cash", "reported_execution", "reported_execution_correction"
+        }
 
 
 def test_extended_order_uses_snapshot_fee_and_rejection_has_no_commission(context):

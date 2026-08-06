@@ -149,6 +149,34 @@ class Api:
                     if body.get("client_order_id") else None,
                 )
                 return ApiResponse(201, _json(asdict(result)))
+            if len(route) == 7 and route[0] == "leagues" \
+                    and route[2] == "competitions" \
+                    and route[4] == "reported-trades" \
+                    and route[6] == "corrections" and method == "POST":
+                result = self.trading.correct_reported_trade(
+                    actor, route[1], route[3], route[5],
+                    occurred_at=datetime.fromisoformat(str(body["date"])),
+                    client_trade_id=str(body.get("client_trade_id", "")),
+                    now=now,
+                )
+                return ApiResponse(201, _json(asdict(result)))
+            if len(route) == 5 and route[0] == "leagues" \
+                    and route[2] == "competitions" \
+                    and route[4] == "reported-trades" and method == "POST":
+                result = self.trading.report_trade(
+                    actor, route[1], route[3],
+                    occurred_at=datetime.fromisoformat(str(body["date"])),
+                    symbol=str(body.get("ticker", "")),
+                    side=str(body.get("type", "")),
+                    quantity_value=str(body.get("quantity", "")),
+                    price_per_share=str(body.get("price_per_share", "")),
+                    total_amount=str(body.get("total_amount", "")),
+                    currency=str(body.get("currency", "")),
+                    fx_rate=str(body.get("fx_rate", "")),
+                    client_trade_id=str(body.get("client_trade_id", "")),
+                    now=now,
+                )
+                return ApiResponse(201, _json(asdict(result)))
             if len(route) == 6 and route[0] == "leagues" \
                     and route[2] == "competitions" and route[4] == "orders" \
                     and method == "DELETE":

@@ -80,6 +80,18 @@ def _exercise_application_contract(store):
     filled = trading.portfolio(owner.id, league.id, competition.id, quote_time)
     assert filled.cash == "2899.01"
     assert filled.executions[0].commission == "0.99"
+    reported = trading.report_trade(
+        member.id, league.id, competition.id, occurred_at=quote_time,
+        symbol="MSFT", side="buy", quantity_value="0.12345678",
+        price_per_share="50", total_amount="7.16", currency="USD",
+        fx_rate="1", client_trade_id=str(uuid4()), now=quote_time,
+    )
+    assert reported.positions[0].quantity == "0.12345678"
+    assert reported.executions[0].source == "reported"
+    with store.transaction() as uow:
+        persisted = uow.trading.get(competition.id, member.id)
+        assert persisted.portfolio.positions["MSFT"] == Decimal("0.12345678")
+        assert persisted.portfolio.executions[0].total_amount == Decimal("7.16")
     with store.transaction() as uow:
         account = uow.trading.get(competition.id, owner.id)
         assert all(sum(posting.amount for posting in entry.postings) == 0
@@ -117,6 +129,7 @@ def postgres_store():
         assert migrate(dsn) == [
             "001_initial", "002_auth0_identity", "003_league_reads",
             "004_competitions", "005_trading_ranking",
+            "006_fractional_reported_trades",
         ]
         assert migrate(dsn) == []
         yield PostgresStore(dsn)
@@ -159,7 +172,7 @@ def test_auth0_migration_upgrades_the_previous_schema(postgres_store, tmp_path):
         assert migrate(previous_dsn, previous_migrations) == ["001_initial"]
         assert migrate(previous_dsn) == [
             "002_auth0_identity", "003_league_reads", "004_competitions",
-            "005_trading_ranking",
+            "005_trading_ranking", "006_fractional_reported_trades",
         ]
         assert migrate(previous_dsn) == []
     finally:
@@ -183,7 +196,46 @@ def test_trading_migration_upgrades_ta034_schema(postgres_store, tmp_path):
             "001_initial", "002_auth0_identity", "003_league_reads",
             "004_competitions",
         ]
-        assert migrate(previous_dsn) == ["005_trading_ranking"]
+        assert migrate(previous_dsn) == [
+            "005_trading_ranking", "006_fractional_reported_trades"
+        ]
+    finally:
+        with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
+            admin.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))
+
+
+def test_fractional_reported_migration_upgrades_ta035_schema(postgres_store, tmp_path):
+    schema = f"tradearena_ta035_{uuid4().hex}"
+    with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
+    previous_dsn = make_conninfo(postgres_store.dsn, options=f"-c search_path={schema}")
+    previous_migrations = tmp_path / "ta035-migrations"
+    previous_migrations.mkdir()
+    source = Path(__file__).parents[2] / "migrations"
+    for version in range(1, 6):
+        path = next(source.glob(f"{version:03d}_*.sql"))
+        (previous_migrations / path.name).write_text(path.read_text())
+    try:
+        assert migrate(previous_dsn, previous_migrations) == [
+            "001_initial", "002_auth0_identity", "003_league_reads",
+            "004_competitions", "005_trading_ranking",
+        ]
+        assert migrate(previous_dsn) == ["006_fractional_reported_trades"]
+        with psycopg.connect(previous_dsn, row_factory=psycopg.rows.dict_row) as connection:
+            columns = connection.execute(
+                """
+                SELECT column_name, data_type, numeric_scale
+                  FROM information_schema.columns
+                 WHERE table_schema = current_schema()
+                   AND table_name IN ('orders', 'executions', 'portfolio_positions')
+                   AND column_name IN ('quantity', 'source', 'total_amount')
+                """
+            ).fetchall()
+        quantity_columns = [row for row in columns if row["column_name"] == "quantity"]
+        assert len(quantity_columns) == 3
+        assert all(row["data_type"] == "numeric" and row["numeric_scale"] == 8
+                   for row in quantity_columns)
+        assert {row["column_name"] for row in columns} >= {"source", "total_amount"}
     finally:
         with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
             admin.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))
