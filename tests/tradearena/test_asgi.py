@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import yaml
@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 
 from tradearena.adapters.memory import MemoryStore
 from tradearena.application.services import (
-    AccountService, AuthService, LeagueService, SessionService,
+    AccountService, AuthService, CompetitionService, LeagueService,
+    SessionService,
 )
 from tradearena.ports.identity import IdentityAssertion
 from tradearena.presentation.api import Api
@@ -36,7 +37,10 @@ def build_client(readiness=lambda: True):
         NOW,
     )
     token = sessions.issue(owner.id, NOW)
-    dispatcher = Api(sessions, accounts, leagues, lambda: NOW)
+    dispatcher = Api(
+        sessions, accounts, leagues, lambda: NOW,
+        competitions=CompetitionService(store, ids),
+    )
     return TestClient(create_app(dispatcher, readiness)), token
 
 
@@ -95,6 +99,31 @@ def test_validation_is_a_stable_400_error():
 
     assert response.status_code == 400
     assert response.json()["error"] == "invalid_input"
+
+
+def test_fastapi_creates_and_starts_competition_with_snapshot():
+    client, token = build_client()
+    headers = {"Authorization": f"Bearer {token}"}
+    league_id = client.post(
+        "/api/v1/leagues", headers=headers, json={"name": "Privada"}
+    ).json()["id"]
+    created = client.post(
+        f"/api/v1/leagues/{league_id}/competitions", headers=headers,
+        json={
+            "name": "Otoño",
+            "starts_at": (NOW + timedelta(days=1)).isoformat(),
+            "ends_at": (NOW + timedelta(days=31)).isoformat(),
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()["rules_snapshot"] is None
+    started = client.post(
+        f"/api/v1/leagues/{league_id}/competitions/{created.json()['id']}/start",
+        headers=headers,
+    )
+    assert started.status_code == 200
+    assert started.json()["rules_snapshot"]["rules"]["initial_capital"] \
+        == "3000.00"
 
 
 def test_fastapi_routes_match_canonical_openapi_operation_ids():

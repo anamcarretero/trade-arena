@@ -12,7 +12,8 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from tradearena.application.models import (
-    Invitation, InvitationStatus, League, Membership, Profile, Role, User,
+    Competition, CompetitionStatus, Invitation, InvitationStatus, League,
+    Membership, Profile, Role, User,
 )
 from tradearena.ports.store import StoreConflict
 
@@ -32,6 +33,16 @@ def _league(row) -> League | None:
     return League(
         str(row["id"]), row["name"], str(row["owner_id"]), row["created_at"],
         row["active"], row["plan"],
+    )
+
+
+def _competition(row) -> Competition | None:
+    if row is None:
+        return None
+    return Competition(
+        str(row["id"]), str(row["league_id"]), row["name"], row["starts_at"],
+        row["ends_at"], CompetitionStatus(row["status"]), row["rules_snapshot"],
+        row["started_at"],
     )
 
 
@@ -390,6 +401,63 @@ class PostgresInvitations(_Repository):
         return row["total"]
 
 
+class PostgresCompetitions(_Repository):
+    def get(
+        self, competition_id: str, *, for_update: bool = False
+    ) -> Competition | None:
+        suffix = " FOR UPDATE" if for_update else ""
+        row = self.connection.execute(
+            "SELECT * FROM competitions WHERE id = %s" + suffix,
+            (competition_id,),
+        ).fetchone()
+        return _competition(row)
+
+    def add(self, competition: Competition) -> None:
+        self.connection.execute(
+            """
+            INSERT INTO competitions(
+                id, league_id, name, starts_at, ends_at, status,
+                rules_snapshot, started_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                competition.id, competition.league_id, competition.name,
+                competition.starts_at, competition.ends_at,
+                competition.status.value,
+                Jsonb(competition.rules_snapshot)
+                if competition.rules_snapshot is not None else None,
+                competition.started_at,
+            ),
+        )
+
+    def save(self, competition: Competition) -> None:
+        self.connection.execute(
+            """
+            UPDATE competitions
+               SET name = %s, starts_at = %s, ends_at = %s, status = %s,
+                   rules_snapshot = %s, started_at = %s
+             WHERE id = %s
+            """,
+            (
+                competition.name, competition.starts_at, competition.ends_at,
+                competition.status.value,
+                Jsonb(competition.rules_snapshot)
+                if competition.rules_snapshot is not None else None,
+                competition.started_at, competition.id,
+            ),
+        )
+
+    def list_for_league(self, league_id: str) -> list[Competition]:
+        rows = self.connection.execute(
+            """
+            SELECT * FROM competitions WHERE league_id = %s
+             ORDER BY starts_at, id
+            """,
+            (league_id,),
+        ).fetchall()
+        return [_competition(row) for row in rows]
+
+
 class PostgresAudit(_Repository):
     def add(
         self, occurred_at: datetime, actor_id: str | None, action: str,
@@ -419,6 +487,7 @@ class PostgresStore:
         self.leagues = PostgresLeagues(self)
         self.memberships = PostgresMemberships(self)
         self.invitations = PostgresInvitations(self)
+        self.competitions = PostgresCompetitions(self)
         self.audit = PostgresAudit(self)
 
     @contextmanager

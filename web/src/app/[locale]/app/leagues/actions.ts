@@ -103,3 +103,49 @@ export async function acceptInvitation(formData: FormData) {
   revalidatePath(`/${locale}/app`);
   redirect(leaguePath(locale, membership.league_id));
 }
+
+function competitionDates(formData: FormData) {
+  const startsOn = String(formData.get("starts_on") ?? "");
+  const endsOn = String(formData.get("ends_on") ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startsOn) || !/^\d{4}-\d{2}-\d{2}$/.test(endsOn)) {
+    throw new Error("Invalid competition calendar");
+  }
+  return {
+    starts_at: `${startsOn}T00:00:00Z`,
+    ends_at: `${endsOn}T23:59:59Z`
+  };
+}
+
+export async function createCompetition(formData: FormData) {
+  const locale = localeFrom(formData);
+  const leagueId = reference(formData, "league_id");
+  const destination = leaguePath(locale, leagueId);
+  const response = await apiFetch(`/api/v1/leagues/${leagueId}/competitions`, {
+    method: "POST",
+    body: JSON.stringify({
+      name: String(formData.get("name") ?? ""),
+      ...competitionDates(formData)
+    })
+  });
+  if (response.status === 403) signIn(locale, destination);
+  if (response.status === 404) redirect(`${destination}?error=access`);
+  if (!response.ok) redirect(`${destination}?error=competition`);
+  revalidatePath(destination);
+  redirect(`${destination}?status=competition-created`);
+}
+
+export async function startCompetition(formData: FormData) {
+  const locale = localeFrom(formData);
+  const leagueId = reference(formData, "league_id");
+  const competitionId = reference(formData, "competition_id");
+  const destination = leaguePath(locale, leagueId);
+  const response = await apiFetch(
+    `/api/v1/leagues/${leagueId}/competitions/${competitionId}/start`,
+    {method: "POST"}
+  );
+  if (response.status === 403) signIn(locale, destination);
+  if (response.status === 404) redirect(`${destination}?error=access`);
+  if (!response.ok) redirect(`${destination}?error=competition`);
+  revalidatePath(destination);
+  redirect(`${destination}?status=competition-started`);
+}

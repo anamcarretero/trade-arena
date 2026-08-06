@@ -8,6 +8,9 @@ export type ApiRoute = ApiPath
   | `/api/v1/leagues/${string}/invitations`
   | `/api/v1/leagues/${string}/invitations/${string}`
   | `/api/v1/leagues/${string}/members/${string}`
+  | `/api/v1/leagues/${string}/competitions`
+  | `/api/v1/leagues/${string}/competitions/${string}`
+  | `/api/v1/leagues/${string}/competitions/${string}/start`
   | `/api/v1/invitations/${string}`;
 export type OwnAccount = {
   user: {id: string; email: string};
@@ -15,6 +18,7 @@ export type OwnAccount = {
 };
 export type LeagueDetail = components["schemas"]["LeagueDetail"];
 export type OwnInvitation = components["schemas"]["OwnInvitation"];
+export type Competition = components["schemas"]["Competition"];
 
 export async function apiFetch(path: ApiRoute, init: RequestInit = {}) {
   const token = await readSessionToken();
@@ -49,6 +53,15 @@ export async function leagueDetail(leagueId: string): Promise<LeagueDetail | nul
 export async function ownInvitations(): Promise<OwnInvitation[] | null> {
   const response = await apiFetch("/api/v1/invitations");
   if (response.status === 403) return null;
+  if (!response.ok) throw new Error(`TradeArena API returned ${response.status}`);
+  return response.json();
+}
+
+export async function leagueCompetitions(leagueId: string): Promise<Competition[] | null> {
+  const response = await apiFetch(
+    `/api/v1/leagues/${encodeURIComponent(leagueId)}/competitions`
+  );
+  if (response.status === 404) return null;
   if (!response.ok) throw new Error(`TradeArena API returned ${response.status}`);
   return response.json();
 }

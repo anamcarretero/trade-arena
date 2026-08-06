@@ -39,7 +39,7 @@ def _json(value):
 class Api:
     def __init__(
         self, sessions, accounts, leagues, clock: Callable[[], datetime],
-        auth=None, bff_shared_secret: str | None = None,
+        auth=None, bff_shared_secret: str | None = None, competitions=None,
     ) -> None:
         self.sessions = sessions
         self.accounts = accounts
@@ -47,6 +47,7 @@ class Api:
         self.clock = clock
         self.auth = auth
         self.bff_shared_secret = bff_shared_secret
+        self.competitions = competitions
 
     def handle(
         self, method: str, path: str, token: str | None = None,
@@ -105,6 +106,29 @@ class Api:
             if len(route) == 2 and route[0] == "leagues" and method == "GET":
                 league = self.leagues.get(actor, route[1], now)
                 return ApiResponse(200, _json(asdict(league)))
+            if len(route) == 3 and route[0] == "leagues" \
+                    and route[2] == "competitions" and method == "GET":
+                items = self.competitions.list_for(actor, route[1])
+                return ApiResponse(200, [_json(asdict(item)) for item in items])
+            if len(route) == 3 and route[0] == "leagues" \
+                    and route[2] == "competitions" and method == "POST":
+                competition = self.competitions.create(
+                    actor, route[1], str(body.get("name", "")),
+                    datetime.fromisoformat(str(body["starts_at"])),
+                    datetime.fromisoformat(str(body["ends_at"])), now,
+                )
+                return ApiResponse(201, _json(asdict(competition)))
+            if len(route) == 4 and route[0] == "leagues" \
+                    and route[2] == "competitions" and method == "GET":
+                competition = self.competitions.get(actor, route[1], route[3])
+                return ApiResponse(200, _json(asdict(competition)))
+            if len(route) == 5 and route[0] == "leagues" \
+                    and route[2] == "competitions" and route[4] == "start" \
+                    and method == "POST":
+                competition = self.competitions.start(
+                    actor, route[1], route[3], now,
+                )
+                return ApiResponse(200, _json(asdict(competition)))
             if len(route) == 3 and route[0] == "leagues" \
                     and route[2] == "invitations" and method == "POST":
                 invitation = self.leagues.invite(

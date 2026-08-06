@@ -132,6 +132,65 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/LeagueDetail"}
         "404": {description: No existe o la sesión no pertenece a ella}
+  /api/v1/leagues/{league_id}/competitions:
+    get:
+      operationId: listLeagueCompetitions
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+      responses:
+        "200":
+          description: Competiciones de una liga accesible para la sesión
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/Competition"}
+        "404": {description: Liga no accesible}
+    post:
+      operationId: createCompetition
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CompetitionInput"}
+      responses:
+        "201":
+          description: Borrador de competición creado por propietario o administrador
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Competition"}
+        "400": {description: Calendario inválido}
+        "404": {description: Liga no accesible}
+  /api/v1/leagues/{league_id}/competitions/{competition_id}:
+    get:
+      operationId: getCompetition
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+        - {$ref: "#/components/parameters/CompetitionId"}
+      responses:
+        "200":
+          description: Competición de una liga accesible para la sesión
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Competition"}
+        "404": {description: Liga o competición no accesible}
+  /api/v1/leagues/{league_id}/competitions/{competition_id}/start:
+    post:
+      operationId: startCompetition
+      description: Fija de forma inmutable el calendario y las reglas vigentes.
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+        - {$ref: "#/components/parameters/CompetitionId"}
+      responses:
+        "200":
+          description: Competición iniciada con rules_snapshot inmutable
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Competition"}
+        "404": {description: Liga o competición no accesible}
+        "409": {description: La competición ya estaba iniciada}
   /api/v1/leagues/{league_id}/invitations:
     post:
       operationId: inviteLeagueMember
@@ -249,6 +308,56 @@ components:
         email: {type: string, format: email}
         expires_at: {type: string, format: date-time}
         status: {$ref: "#/components/schemas/InvitationStatus"}
+    CompetitionInput:
+      type: object
+      required: [name, starts_at, ends_at]
+      additionalProperties: false
+      properties:
+        name: {type: string, minLength: 1}
+        starts_at: {type: string, format: date-time}
+        ends_at: {type: string, format: date-time}
+    CompetitionStatus:
+      type: string
+      enum: [draft, active, finished]
+    RulesSnapshot:
+      type: object
+      description: Copia inmutable del calendario y reglas vigentes al iniciar.
+      required: [version, calendar, rules]
+      properties:
+        version: {type: string}
+        calendar:
+          type: object
+          required: [market, timezone, starts_at, ends_at]
+          properties:
+            market: {type: string}
+            timezone: {type: string}
+            starts_at: {type: string, format: date-time}
+            ends_at: {type: string, format: date-time}
+        rules:
+          type: object
+          required: [currency, initial_capital]
+          properties:
+            currency: {type: string, enum: [USD]}
+            initial_capital: {type: string, pattern: '^3000\\.00$'}
+          additionalProperties: true
+    Competition:
+      type: object
+      required: [id, league_id, name, starts_at, ends_at, status, rules_snapshot, started_at]
+      properties:
+        id: {type: string}
+        league_id: {type: string}
+        name: {type: string}
+        starts_at: {type: string, format: date-time}
+        ends_at: {type: string, format: date-time}
+        status: {$ref: "#/components/schemas/CompetitionStatus"}
+        rules_snapshot:
+          oneOf:
+            - {$ref: "#/components/schemas/RulesSnapshot"}
+            - {type: "null"}
+        started_at:
+          oneOf:
+            - {type: string, format: date-time}
+            - {type: "null"}
   securitySchemes:
     bearerSession:
       type: http
@@ -260,6 +369,11 @@ components:
   parameters:
     LeagueId:
       name: league_id
+      in: path
+      required: true
+      schema: {type: string}
+    CompetitionId:
+      name: competition_id
       in: path
       required: true
       schema: {type: string}

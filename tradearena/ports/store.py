@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Protocol
 
 from tradearena.application.models import (
-    Invitation, League, Membership, Profile, User,
+    Competition, Invitation, League, Membership, Profile, User,
 )
 
 
@@ -73,6 +73,15 @@ class InvitationRepository(Protocol):
     def count_pending(self, league_id: str, now: datetime) -> int: ...
 
 
+class CompetitionRepository(Protocol):
+    def get(
+        self, competition_id: str, *, for_update: bool = False
+    ) -> Competition | None: ...
+    def add(self, competition: Competition) -> None: ...
+    def save(self, competition: Competition) -> None: ...
+    def list_for_league(self, league_id: str) -> list[Competition]: ...
+
+
 class AuditRepository(Protocol):
     def add(
         self, occurred_at: datetime, actor_id: str | None, action: str,
@@ -87,6 +96,7 @@ class UnitOfWork(Protocol):
     leagues: LeagueRepository
     memberships: MembershipRepository
     invitations: InvitationRepository
+    competitions: CompetitionRepository
     audit: AuditRepository
 
 

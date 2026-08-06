@@ -124,6 +124,11 @@ identidades creadas por TA-030.
 activos e invitaciones pendientes por email sin modificar ni eliminar el
 historial existente.
 
+`migrations/004_competitions.sql` permite que un borrador no tenga todavía
+`rules_snapshot`, registra `started_at`, indexa las competiciones por liga y
+añade tanto una restricción de ciclo de vida como un trigger que impide cambiar
+el snapshot una vez materializado.
+
 Al crear una liga Free se bloquea la fila del propietario antes de comprobar
 su límite, y el índice parcial mantiene una segunda defensa. Al invitar o
 aceptar se bloquea la liga antes de contar miembros e invitaciones pendientes,
@@ -182,6 +187,25 @@ como «Próximamente», sin precios, Checkout ni concesión de derechos. La llam
 a la acción se resuelve en el servidor hacia el acceso o `/{locale}/app` según
 la cookie de sesión `HttpOnly`. La facturación y la activación de esos planes
 continúan reservadas para la Fase 5.
+
+TA-034 añade casos de uso y repositorios de competición con el mismo contrato
+en memoria y PostgreSQL. Propietario y administrador crean un borrador con
+nombre y calendario; cualquier miembro activo puede leerlo. Al iniciarlo, el
+backend vuelve a autorizar la liga, bloquea liga y competición y copia en
+`rules_snapshot` una estructura v1 con calendario XNYS, zona
+`America/New_York`, reglas operativas y el capital Free fijo de `3000.00 USD`.
+La copia se realiza en ese instante, se devuelve como dato independiente y no
+puede actualizarse después ni desde la aplicación ni directamente en SQL.
+
+La API expone listado/creación bajo
+`/api/v1/leagues/{league_id}/competitions`, detalle y la acción explícita
+`.../{competition_id}/start`. Todas las rutas validan primero la membresía de
+la liga indicada y tratan como `404` una liga ajena, una competición ajena o
+una competición que no pertenece a la liga de la URL. La PWA amplía el detalle
+de liga con el formulario de calendario, inicio y una confirmación ES/EN que
+muestra claramente que reglas y calendario quedaron fijados. Las Server
+Actions siguen transmitiendo solo referencias y formulario; la sesión opaca
+permanece cifrada en la cookie `HttpOnly` del BFF.
 
 ### Portabilidad operativa
 

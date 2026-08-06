@@ -20,6 +20,12 @@ class InvitationStatus(str, Enum):
     EXPIRED = "expired"
 
 
+class CompetitionStatus(str, Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    FINISHED = "finished"
+
+
 @dataclass
 class User:
     id: str
@@ -108,6 +114,30 @@ class OwnInvitationView:
     league_id: str
     league_name: str
     expires_at: datetime
+
+
+@dataclass
+class Competition:
+    id: str
+    league_id: str
+    name: str
+    starts_at: datetime
+    ends_at: datetime
+    status: CompetitionStatus = CompetitionStatus.DRAFT
+    rules_snapshot: dict[str, object] | None = None
+    started_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class CompetitionView:
+    id: str
+    league_id: str
+    name: str
+    starts_at: datetime
+    ends_at: datetime
+    status: CompetitionStatus
+    rules_snapshot: dict[str, object] | None
+    started_at: datetime | None
 
 
 @dataclass(frozen=True)
