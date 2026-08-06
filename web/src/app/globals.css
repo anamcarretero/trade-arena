@@ -79,6 +79,42 @@ a {
   min-width: 0;
 }
 
+.public-topbar {
+  justify-content: flex-start;
+}
+
+.public-nav {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: clamp(.75rem, 2vw, 1.5rem);
+  margin-left: auto;
+}
+
+.public-nav a {
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.public-nav a:hover,
+.public-nav a[aria-current="page"] {
+  color: white;
+}
+
+.public-nav .nav-session {
+  padding: .55rem .8rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  color: #d8dae1;
+  background: rgb(23 26 33 / 72%);
+}
+
+.public-topbar > .locale {
+  flex: 0 0 auto;
+}
+
 .wordmark {
   display: inline-flex;
   align-items: center;
@@ -525,6 +561,132 @@ a {
 .dashboard-card p {
   color: var(--muted);
   line-height: 1.6;
+}
+
+.pricing-shell {
+  padding-bottom: 7rem;
+}
+
+.pricing-hero {
+  max-width: 950px;
+  padding: clamp(5rem, 10vw, 9rem) 0 clamp(3rem, 6vw, 5rem);
+}
+
+.pricing-hero h1 {
+  max-width: 900px;
+  margin: 0;
+  color: white;
+  font: 750 clamp(3.4rem, 7vw, 7rem)/.96 var(--display);
+  letter-spacing: -.05em;
+}
+
+.pricing-hero > p:last-child {
+  max-width: 720px;
+  margin: 1.75rem 0 0;
+  color: var(--muted);
+  font-size: clamp(1rem, 1.45vw, 1.15rem);
+  line-height: 1.65;
+}
+
+.pricing-grid {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.pricing-card {
+  min-width: 0;
+  min-height: 560px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: clamp(1.35rem, 2.5vw, 2rem);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 90% 8%, rgb(112 71 235 / 13%), transparent 31%),
+    linear-gradient(145deg, rgb(23 26 33 / 94%), rgb(8 9 12 / 94%));
+}
+
+.pricing-card.featured {
+  border-color: rgb(89 126 255 / 52%);
+  box-shadow: 0 22px 65px rgb(41 98 255 / 14%);
+}
+
+.pricing-card.future {
+  background: linear-gradient(145deg, rgb(18 20 26 / 76%), rgb(7 8 11 / 86%));
+}
+
+.pricing-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.pricing-card-head > span:last-child {
+  color: #565b69;
+  font-size: .7rem;
+  letter-spacing: .1em;
+}
+
+.pricing-card h2 {
+  margin: clamp(3.5rem, 7vw, 6rem) 0 1rem;
+  color: white;
+  font-size: clamp(2.5rem, 4vw, 4.2rem);
+  letter-spacing: -.05em;
+}
+
+.pricing-card > p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.pricing-card h3 {
+  margin: 2.5rem 0 1rem;
+  color: #d8dae1;
+  font-size: .72rem;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.pricing-card ul {
+  display: flex;
+  flex-direction: column;
+  gap: .85rem;
+  margin: 0 0 2rem;
+  padding: 0;
+  list-style: none;
+}
+
+.pricing-card li {
+  display: grid;
+  grid-template-columns: 1.2rem minmax(0, 1fr);
+  gap: .5rem;
+  color: #c5c8d1;
+  font-size: .9rem;
+  line-height: 1.45;
+}
+
+.pricing-card li span {
+  color: var(--success);
+}
+
+.pricing-cta {
+  width: 100%;
+  min-width: 0;
+  margin-top: auto;
+}
+
+.pricing-card .unavailable-note {
+  margin-top: auto;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line-soft);
+  color: #777b89;
+  font-size: .82rem;
 }
 
 .error {
@@ -1460,6 +1622,22 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pricing-card {
+    min-height: 0;
+  }
+
+  .pricing-card h2 {
+    margin-top: 3rem;
+  }
+
+  .pricing-card .unavailable-note {
+    margin-top: 4rem;
+  }
+
   .features article {
     min-height: 220px;
   }
@@ -1509,6 +1687,36 @@ a {
   .wordmark::before {
     width: 20px;
     height: 18px;
+  }
+
+  .public-topbar {
+    gap: .7rem;
+  }
+
+  .public-nav {
+    gap: .65rem;
+  }
+
+  .public-nav .nav-session {
+    display: none;
+  }
+
+  .pricing-shell {
+    padding-bottom: 4rem;
+  }
+
+  .pricing-hero {
+    padding: 4rem 0 2.5rem;
+  }
+
+  .pricing-hero h1 {
+    overflow-wrap: anywhere;
+    font-size: clamp(3rem, 15vw, 4.5rem);
+  }
+
+  .pricing-card {
+    padding: 1.25rem;
+    border-radius: 16px;
   }
 
   .hero {

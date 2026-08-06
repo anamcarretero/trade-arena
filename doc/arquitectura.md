@@ -175,10 +175,13 @@ vuelve a autenticar, autorizar y aplicar los límites dentro de la transacción.
 El único componente cliente nuevo copia el enlace de invitación y no recibe la
 sesión opaca ni ninguna credencial interna.
 
-TA-033 añadirá `/{locale}/pricing` como página pública responsive dentro de la
-misma PWA. Mostrará Free con sus límites vigentes y Friends/Club como
-«Próximamente», sin precios ficticios, Checkout ni concesión de derechos. La
-facturación y la activación de esos planes continúan reservadas para la Fase 5.
+TA-033 añade `/{locale}/pricing` como página pública responsive dentro de la
+misma PWA y un enlace desde su navegación pública. Muestra Free con una liga
+activa, dos plazas y 3.000 USD iniciales por competición; Friends y Club figuran
+como «Próximamente», sin precios, Checkout ni concesión de derechos. La llamada
+a la acción se resuelve en el servidor hacia el acceso o `/{locale}/app` según
+la cookie de sesión `HttpOnly`. La facturación y la activación de esos planes
+continúan reservadas para la Fase 5.
 
 ### Portabilidad operativa
 

@@ -35,6 +35,8 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
       - name: Instalar dependencias PWA
         run: pnpm install --frozen-lockfile
+      - name: Instalar navegador de pruebas
+        run: pnpm exec playwright install --with-deps chromium
       - name: Verificar cliente OpenAPI y PWA
         run: |
           pnpm generate:api
@@ -43,6 +45,7 @@ jobs:
           pnpm typecheck
           pnpm test
           pnpm build
+          pnpm test:e2e
 
   python:
     runs-on: ubuntu-latest

@@ -12,5 +12,5 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {themeColor: "#2962ff", colorScheme: "dark"};
 
 export default function RootLayout({children}: Readonly<{children: React.ReactNode}>) {
-  return <html lang="es"><body><PwaRegister />{children}</body></html>;
+  return <html lang="es" data-scroll-behavior="smooth"><body><PwaRegister />{children}</body></html>;
 }
