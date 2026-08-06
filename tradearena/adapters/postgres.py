@@ -276,6 +276,20 @@ class PostgresMemberships(_Repository):
             row["joined_at"], row["removed_at"],
         ) for row in rows]
 
+    def list_active_for_league(self, league_id: str) -> list[Membership]:
+        rows = self.connection.execute(
+            """
+            SELECT * FROM league_memberships
+             WHERE league_id = %s AND removed_at IS NULL
+             ORDER BY joined_at, user_id
+            """,
+            (league_id,),
+        ).fetchall()
+        return [Membership(
+            str(row["league_id"]), str(row["user_id"]), Role(row["role"]),
+            row["joined_at"], row["removed_at"],
+        ) for row in rows]
+
     def count_active(self, league_id: str) -> int:
         row = self.connection.execute(
             """
@@ -338,6 +352,30 @@ class PostgresInvitations(_Repository):
              ORDER BY created_at, id
             """,
             (email,),
+        ).fetchall()
+        return [self._map(row) for row in rows]
+
+    def list_pending_for_email(
+        self, email: str, now: datetime
+    ) -> list[Invitation]:
+        rows = self.connection.execute(
+            """
+            SELECT * FROM league_invitations
+             WHERE lower(email) = lower(%s)
+               AND status = 'pending' AND expires_at > %s
+             ORDER BY created_at, id
+            """,
+            (email, now),
+        ).fetchall()
+        return [self._map(row) for row in rows]
+
+    def list_for_league(self, league_id: str) -> list[Invitation]:
+        rows = self.connection.execute(
+            """
+            SELECT * FROM league_invitations WHERE league_id = %s
+             ORDER BY created_at, id
+            """,
+            (league_id,),
         ).fetchall()
         return [self._map(row) for row in rows]
 

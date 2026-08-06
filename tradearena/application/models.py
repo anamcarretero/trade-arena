@@ -72,6 +72,45 @@ class Invitation:
 
 
 @dataclass(frozen=True)
+class LeagueMemberView:
+    user_id: str
+    display_name: str
+    role: Role
+    joined_at: datetime
+
+
+@dataclass(frozen=True)
+class LeagueInvitationView:
+    id: str
+    email: str
+    role: Role
+    expires_at: datetime
+    status: InvitationStatus
+
+
+@dataclass(frozen=True)
+class LeagueView:
+    id: str
+    name: str
+    owner_id: str
+    created_at: datetime
+    active: bool
+    plan: str
+    actor_role: Role
+    max_members: int
+    members: tuple[LeagueMemberView, ...]
+    invitations: tuple[LeagueInvitationView, ...]
+
+
+@dataclass(frozen=True)
+class OwnInvitationView:
+    id: str
+    league_id: str
+    league_name: str
+    expires_at: datetime
+
+
+@dataclass(frozen=True)
 class AuditEvent:
     sequence: int
     occurred_at: datetime

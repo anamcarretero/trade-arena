@@ -129,6 +129,16 @@ class MemoryMemberships:
             if membership.user_id == user_id
         ]
 
+    def list_active_for_league(self, league_id: str) -> list[Membership]:
+        return sorted(
+            (
+                membership for membership in self.store._memberships.values()
+                if membership.league_id == league_id
+                and membership.removed_at is None
+            ),
+            key=lambda membership: (membership.joined_at, membership.user_id),
+        )
+
     def count_active(self, league_id: str) -> int:
         return sum(
             1 for membership in self.store._memberships.values()
@@ -156,6 +166,24 @@ class MemoryInvitations:
             invitation for invitation in self.store._invitations.values()
             if invitation.email == email.lower()
         ]
+
+    def list_pending_for_email(
+        self, email: str, now: datetime
+    ) -> list[Invitation]:
+        return [
+            invitation for invitation in self.list_for_email(email)
+            if invitation.status is InvitationStatus.PENDING
+            and invitation.expires_at > now
+        ]
+
+    def list_for_league(self, league_id: str) -> list[Invitation]:
+        return sorted(
+            (
+                invitation for invitation in self.store._invitations.values()
+                if invitation.league_id == league_id
+            ),
+            key=lambda invitation: (invitation.created_at, invitation.id),
+        )
 
     def count_pending(self, league_id: str, now: datetime) -> int:
         return sum(

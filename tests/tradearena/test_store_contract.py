@@ -40,17 +40,17 @@ def _exercise_application_contract(store):
     assert sessions.authenticate(token) == owner.id
 
     league = leagues.create(owner.id, "Privada", NOW)
-    invitation = leagues.invite(
-        owner.id, league.id, member.email, NOW + timedelta(days=1), NOW
-    )
+    invitation = leagues.invite(owner.id, league.id, member.email, NOW)
     with pytest.raises(PlanLimitExceeded):
-        leagues.invite(
-            owner.id, league.id, "third@example.com", NOW + timedelta(days=1), NOW
-        )
+        leagues.invite(owner.id, league.id, "third@example.com", NOW)
+    assert leagues.list_invitations(member.id, NOW)[0].id == invitation.id
     leagues.accept(member.id, invitation.id, NOW)
 
-    assert leagues.get(member.id, league.id).name == "Privada"
-    assert [item.id for item in leagues.list_for(member.id)] == [league.id]
+    detail = leagues.get(member.id, league.id, NOW)
+    assert detail.name == "Privada"
+    assert [item.user_id for item in detail.members] == [owner.id, member.id]
+    assert detail.invitations == ()
+    assert [item.id for item in leagues.list_for(member.id, NOW)] == [league.id]
     assert accounts.export(member.id, member.id)["memberships"][0]["league_id"] \
         == league.id
 
@@ -80,7 +80,9 @@ def postgres_store():
         admin.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
     dsn = make_conninfo(TEST_DATABASE_URL, options=f"-c search_path={schema}")
     try:
-        assert migrate(dsn) == ["001_initial", "002_auth0_identity"]
+        assert migrate(dsn) == [
+            "001_initial", "002_auth0_identity", "003_league_reads"
+        ]
         assert migrate(dsn) == []
         yield PostgresStore(dsn)
     finally:
@@ -120,7 +122,9 @@ def test_auth0_migration_upgrades_the_previous_schema(postgres_store, tmp_path):
     (previous_migrations / initial.name).write_text(initial.read_text())
     try:
         assert migrate(previous_dsn, previous_migrations) == ["001_initial"]
-        assert migrate(previous_dsn) == ["002_auth0_identity"]
+        assert migrate(previous_dsn) == [
+            "002_auth0_identity", "003_league_reads"
+        ]
         assert migrate(previous_dsn) == []
     finally:
         with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
@@ -173,9 +177,7 @@ def test_postgres_serializes_free_invitation_slots(postgres_store):
 
     def invite(email):
         try:
-            leagues.invite(
-                owner.id, league.id, email, NOW + timedelta(days=1), NOW
-            )
+            leagues.invite(owner.id, league.id, email, NOW)
             return "created"
         except PlanLimitExceeded:
             return "limited"

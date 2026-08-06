@@ -68,6 +68,20 @@ def test_fastapi_wraps_dispatcher_and_preserves_private_authorization():
     )
     assert created.status_code == 201
     assert created.json()["name"] == "Privada"
+    league_id = created.json()["id"]
+    assert created.json()["actor_role"] == "owner"
+    invitation = client.post(
+        f"/api/v1/leagues/{league_id}/invitations",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": "member@example.com"},
+    )
+    assert invitation.status_code == 201
+    assert invitation.json()["status"] == "pending"
+    detail = client.get(
+        f"/api/v1/leagues/{league_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert detail.json()["invitations"][0]["id"] == invitation.json()["id"]
 
 
 def test_validation_is_a_stable_400_error():

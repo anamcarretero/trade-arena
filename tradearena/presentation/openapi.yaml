@@ -85,7 +85,13 @@ paths:
     get:
       operationId: listOwnLeagues
       responses:
-        "200": {description: Ligas de las que forma parte la sesión}
+        "200":
+          description: Ligas de las que forma parte la sesión
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/LeagueDetail"}
     post:
       operationId: createLeague
       requestBody:
@@ -97,23 +103,55 @@ paths:
               required: [name]
               properties: {name: {type: string, minLength: 1}}
       responses:
-        "201": {description: Liga creada}
+        "201":
+          description: Liga creada
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/LeagueDetail"}
         "409": {description: Límite del plan alcanzado}
+  /api/v1/invitations:
+    get:
+      operationId: listOwnInvitations
+      responses:
+        "200":
+          description: Invitaciones pendientes ligadas al email de la sesión
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/OwnInvitation"}
   /api/v1/leagues/{league_id}:
     get:
       operationId: getLeague
       parameters:
         - {$ref: "#/components/parameters/LeagueId"}
       responses:
-        "200": {description: Liga autorizada}
+        "200":
+          description: Liga autorizada con miembros e invitaciones visibles por rol
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/LeagueDetail"}
         "404": {description: No existe o la sesión no pertenece a ella}
   /api/v1/leagues/{league_id}/invitations:
     post:
       operationId: inviteLeagueMember
       parameters:
         - {$ref: "#/components/parameters/LeagueId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: {type: string, format: email, maxLength: 254}
       responses:
-        "201": {description: Invitación creada}
+        "201":
+          description: Enlace de invitación creado; caduca a los siete días
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/CreatedInvitation"}
         "404": {description: Liga no accesible}
         "409": {description: Límite del plan alcanzado}
   /api/v1/leagues/{league_id}/invitations/{invitation_id}:
@@ -138,7 +176,7 @@ paths:
           schema: {type: string}
       responses:
         "200": {description: Membresía creada}
-        "403": {description: La invitación corresponde a otro email}
+        "404": {description: Invitación no utilizable por esta sesión}
   /api/v1/leagues/{league_id}/members/{user_id}:
     delete:
       operationId: removeLeagueMember
@@ -152,6 +190,65 @@ paths:
         "204": {description: Miembro expulsado conservando historial}
         "404": {description: Liga no accesible}
 components:
+  schemas:
+    Role:
+      type: string
+      enum: [owner, admin, member]
+    InvitationStatus:
+      type: string
+      enum: [pending, accepted, revoked, expired]
+    LeagueMember:
+      type: object
+      required: [user_id, display_name, role, joined_at]
+      properties:
+        user_id: {type: string}
+        display_name: {type: string}
+        role: {$ref: "#/components/schemas/Role"}
+        joined_at: {type: string, format: date-time}
+    LeagueInvitation:
+      type: object
+      required: [id, email, role, expires_at, status]
+      properties:
+        id: {type: string}
+        email: {type: string, format: email}
+        role: {$ref: "#/components/schemas/Role"}
+        expires_at: {type: string, format: date-time}
+        status: {$ref: "#/components/schemas/InvitationStatus"}
+    LeagueDetail:
+      type: object
+      required: [id, name, owner_id, created_at, active, plan, actor_role, max_members, members, invitations]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        owner_id: {type: string}
+        created_at: {type: string, format: date-time}
+        active: {type: boolean}
+        plan: {type: string, enum: [free]}
+        actor_role: {$ref: "#/components/schemas/Role"}
+        max_members: {type: integer, minimum: 1}
+        members:
+          type: array
+          items: {$ref: "#/components/schemas/LeagueMember"}
+        invitations:
+          type: array
+          description: Solo se devuelve a propietario o administrador.
+          items: {$ref: "#/components/schemas/LeagueInvitation"}
+    OwnInvitation:
+      type: object
+      required: [id, league_id, league_name, expires_at]
+      properties:
+        id: {type: string}
+        league_id: {type: string}
+        league_name: {type: string}
+        expires_at: {type: string, format: date-time}
+    CreatedInvitation:
+      type: object
+      required: [id, email, expires_at, status]
+      properties:
+        id: {type: string}
+        email: {type: string, format: email}
+        expires_at: {type: string, format: date-time}
+        status: {$ref: "#/components/schemas/InvitationStatus"}
   securitySchemes:
     bearerSession:
       type: http

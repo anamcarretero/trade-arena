@@ -47,8 +47,10 @@ una simulación educativa sin dinero, premios, retiradas ni conexión a bróker.
 - Las ligas son privadas. Todas las consultas y mutaciones validan una
   membresía activa; una persona ajena recibe `404` para no revelar existencia.
 - Propietario y administrador invitan, revocan y expulsan. La invitación está
-  ligada al email, caduca y solo se consume una vez. Una expulsión conserva el
-  historial financiero y excluye del ranking activo.
+  ligada al email, caduca y solo se consume una vez. En TA-032 se comparte como
+  enlace copiable; el envío de correo se difiere. Un enlace inválido, caducado,
+  revocado o usado por otro email responde `404` sin distinguir la causa. Una
+  expulsión conserva el historial financiero y excluye del ranking activo.
 - Al empezar, calendario y reglas se copian a `rules_snapshot`. Una entrada
   tardía recibe el capital inicial completo y queda marcada en el ranking.
 - Free permite una liga activa del creador y dos plazas, contando propietario,

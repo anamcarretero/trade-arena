@@ -1,4 +1,4 @@
-const CACHE = "tradearena-shell-v2";
+const CACHE = "tradearena-shell-v3";
 self.addEventListener("install", event => event.waitUntil(
   caches.open(CACHE).then(cache => cache.addAll(["/offline", "/icon.svg"])).then(() => self.skipWaiting())
 ));

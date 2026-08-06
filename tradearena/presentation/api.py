@@ -89,22 +89,33 @@ class Api:
             if method == "DELETE" and route == ["me"]:
                 self.accounts.delete(actor, actor, now)
                 return ApiResponse(204, None)
+            if route == ["invitations"] and method == "GET":
+                return ApiResponse(200, [
+                    _json(asdict(item))
+                    for item in self.leagues.list_invitations(actor, now)
+                ])
             if route == ["leagues"] and method == "GET":
                 return ApiResponse(200, [_json(asdict(item))
-                                         for item in self.leagues.list_for(actor)])
+                                         for item in self.leagues.list_for(actor, now)])
             if route == ["leagues"] and method == "POST":
                 league = self.leagues.create(actor, str(body.get("name", "")), now)
-                return ApiResponse(201, _json(asdict(league)))
+                return ApiResponse(
+                    201, _json(asdict(self.leagues.get(actor, league.id, now)))
+                )
             if len(route) == 2 and route[0] == "leagues" and method == "GET":
-                league = self.leagues.get(actor, route[1])
+                league = self.leagues.get(actor, route[1], now)
                 return ApiResponse(200, _json(asdict(league)))
             if len(route) == 3 and route[0] == "leagues" \
                     and route[2] == "invitations" and method == "POST":
                 invitation = self.leagues.invite(
-                    actor, route[1], str(body.get("email", "")),
-                    datetime.fromisoformat(str(body["expires_at"])), now,
+                    actor, route[1], str(body.get("email", "")), now,
                 )
-                return ApiResponse(201, _json(asdict(invitation)))
+                return ApiResponse(201, _json({
+                    "id": invitation.id,
+                    "email": invitation.email,
+                    "expires_at": invitation.expires_at,
+                    "status": invitation.status,
+                }))
             if len(route) == 4 and route[0] == "leagues" \
                     and route[2] == "invitations" and method == "DELETE":
                 self.leagues.revoke(actor, route[1], route[3], now)
