@@ -158,6 +158,8 @@ class Api:
                     str(body["limit_price"]) if body.get("limit_price") is not None else None,
                     now, str(body["client_order_id"])
                     if body.get("client_order_id") else None,
+                    str(body["commission"]).replace(",", ".")
+                    if body.get("commission") is not None else None,
                 )
                 return ApiResponse(201, _json(asdict(result)))
             if len(route) == 7 and route[0] == "leagues" \
@@ -190,6 +192,10 @@ class Api:
                     fx_rate=str(body.get("fx_rate", "")),
                     client_trade_id=str(body.get("client_trade_id", "")),
                     now=now,
+                    commission_value=(
+                        str(body["commission"]).replace(",", ".")
+                        if body.get("commission") is not None else None
+                    ),
                 )
                 return ApiResponse(201, _json(asdict(result)))
             if len(route) == 6 and route[0] == "leagues" \

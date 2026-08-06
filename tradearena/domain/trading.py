@@ -96,6 +96,7 @@ class Order:
     limit_price: Decimal | None = None
     status: OrderStatus = OrderStatus.PENDING
     rejection_reason: str | None = None
+    commission: Decimal | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "symbol", self.symbol.upper())
@@ -112,6 +113,10 @@ class Order:
             object.__setattr__(self, "limit_price", price(self.limit_price))
             if self.limit_price <= 0:
                 raise ValueError("el precio límite debe ser positivo")
+        if self.commission is not None:
+            object.__setattr__(self, "commission", money(self.commission))
+            if self.commission < 0:
+                raise ValueError("la comisión no puede ser negativa")
 
 
 @dataclass(frozen=True)
@@ -256,7 +261,7 @@ class PortfolioSnapshot:
 
 
 class TradingEngine:
-    """Ejecuta con las comisiones inmutables recibidas del ``rules_snapshot``."""
+    """Ejecuta con la comisión de la orden o el respaldo del ``rules_snapshot``."""
 
     def __init__(
         self, regular_commission: Decimal = Decimal("1.15"),
@@ -445,10 +450,12 @@ class TradingEngine:
         return quoted >= order.limit_price
 
     def _execute(self, portfolio: Portfolio, order: Order, quote: Quote) -> Execution | None:
-        commission = money(
-            self.regular_commission if quote.session is Session.REGULAR
-            else self.extended_commission
-        )
+        commission = order.commission
+        if commission is None:
+            commission = money(
+                self.regular_commission if quote.session is Session.REGULAR
+                else self.extended_commission
+            )
         gross = money(quote.value * order.quantity)
         if order.side is OrderSide.BUY:
             if portfolio.cash < gross + commission:

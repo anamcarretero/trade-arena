@@ -53,6 +53,9 @@ class OrderInput(BaseModel):
     order_type: str = Field(pattern=r"^(market|limit)$")
     allow_extended_hours: bool = False
     limit_price: str | None = None
+    commission: str | None = Field(
+        default=None, pattern=r"^\d+(?:[.,]\d{1,2})?$"
+    )
     client_order_id: str | None = Field(
         default=None, min_length=1, max_length=64,
         pattern=r"^[A-Za-z0-9-]+$",
@@ -69,6 +72,9 @@ class ReportedTradeInput(BaseModel):
     quantity: Decimal = Field(gt=0, decimal_places=8)
     price_per_share: str = Field(pattern=r"^\d+(?:[.,]\d{1,4})?$")
     total_amount: str = Field(pattern=r"^\d+(?:[.,]\d{1,2})?$")
+    commission: str | None = Field(
+        default=None, pattern=r"^\d+(?:[.,]\d{1,2})?$"
+    )
     currency: str = Field(pattern=r"^[A-Za-z]{3}$")
     fx_rate: str = Field(pattern=r"^\d+(?:\.\d{1,8})?$")
     client_trade_id: str = Field(

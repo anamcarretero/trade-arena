@@ -463,6 +463,8 @@ export interface components {
             order_type: "market" | "limit";
             allow_extended_hours: boolean;
             limit_price?: string | null;
+            /** @description Comisión elegida por el usuario; si se omite se aplica la comisión fijada en rules_snapshot al ejecutarse. */
+            commission?: string | null;
             client_order_id?: string | null;
         };
         Order: {
@@ -480,6 +482,7 @@ export interface components {
             rejection_reason: string | null;
             /** Format: date-time */
             submitted_at: string;
+            commission: string | null;
         };
         Execution: {
             id: string;
@@ -539,6 +542,8 @@ export interface components {
             quantity: string;
             price_per_share: string;
             total_amount: string;
+            /** @description Opcional; si se omite se infiere del precio, cantidad, tipo e importe total. */
+            commission?: string | null;
             /** @enum {string} */
             currency: "USD";
             fx_rate: string;

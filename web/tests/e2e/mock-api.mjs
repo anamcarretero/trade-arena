@@ -92,19 +92,19 @@ createServer(async (request, response) => {
       quantity: input.quantity, order_type: input.order_type,
       allow_extended_hours: input.allow_extended_hours,
       limit_price: input.limit_price, status: "filled", rejection_reason: null,
-      submitted_at: "2026-09-02T14:30:00Z"
+      submitted_at: "2026-09-02T14:30:00Z", commission: input.commission
     };
     portfolio.orders.push(order);
     portfolio.executions.push({
       id: `execution-${order.id}`, order_id: order.id, symbol: order.symbol,
       side: order.side, quantity: order.quantity, price: "100.0000",
-      commission: "1.15", session: "regular",
+      commission: input.commission?.replace(",", ".") ?? "1.15", session: "regular",
       executed_at: "2026-09-02T14:31:00Z", source: "fixture",
       total_amount: null, currency: "USD", fx_rate: "1", correction_of: null
     });
-    portfolio.cash = "2798.85";
-    portfolio.equity = "2998.85";
-    portfolio.cumulative_return = "-0.000383333333";
+    portfolio.cash = "2799.25";
+    portfolio.equity = "2999.25";
+    portfolio.cumulative_return = "-0.000250000000";
     portfolio.positions = [{
       symbol: order.symbol, quantity: order.quantity,
       price: "100.0000", market_value: "200.00"
@@ -120,14 +120,16 @@ createServer(async (request, response) => {
       id: `reported-${input.client_trade_id}`, symbol: input.ticker,
       side: input.type, quantity: input.quantity, order_type: "market",
       allow_extended_hours: false, limit_price: null, status: "filled",
-      rejection_reason: null, submitted_at: input.date
+      rejection_reason: null, submitted_at: input.date,
+      commission: input.commission?.replace(",", ".") ?? "1.15"
     };
     portfolio.orders.push(order);
     portfolio.executions.push({
       id: `execution-${order.id}`, order_id: order.id, symbol: order.symbol,
       side: order.side, quantity: order.quantity,
       price: input.price_per_share.replace(",", "."),
-      commission: "1.15", session: "regular", executed_at: input.date,
+      commission: input.commission?.replace(",", ".") ?? "1.15",
+      session: "regular", executed_at: input.date,
       source: "reported", total_amount: input.total_amount,
       currency: "USD", fx_rate: "1", correction_of: null
     });

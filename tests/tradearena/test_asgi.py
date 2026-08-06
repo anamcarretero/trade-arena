@@ -271,6 +271,40 @@ def test_reported_trade_accepts_madrid_time_and_decimal_commas_by_default():
     assert execution["executed_at"] == "2026-08-05T14:00:00+02:00"
 
 
+def test_api_accepts_optional_decimal_comma_commissions():
+    client, token = build_client()
+    headers = {"Authorization": f"Bearer {token}"}
+    league_id = client.post(
+        "/api/v1/leagues", headers=headers, json={"name": "Fees"}
+    ).json()["id"]
+    competition = client.post(
+        f"/api/v1/leagues/{league_id}/competitions", headers=headers,
+        json={
+            "name": "Custom fees", "starts_at": NOW.isoformat(),
+            "ends_at": (NOW + timedelta(days=1)).isoformat(),
+        },
+    ).json()
+    base = f"/api/v1/leagues/{league_id}/competitions/{competition['id']}"
+    client.post(f"{base}/start", headers=headers)
+    order = client.post(f"{base}/orders", headers=headers, json={
+        "symbol": "AAPL", "side": "buy", "quantity": "1",
+        "order_type": "limit", "allow_extended_hours": False,
+        "limit_price": "1", "commission": "0,75",
+        "client_order_id": "custom-fee",
+    })
+    assert order.status_code == 201
+    assert order.json()["orders"][0]["commission"] == "0.75"
+
+    reported = client.post(f"{base}/reported-trades", headers=headers, json={
+        "date": NOW.isoformat(), "ticker": "MU", "type": "buy",
+        "quantity": "1", "price_per_share": "100", "total_amount": "100,43",
+        "commission": "0,43", "currency": "USD", "fx_rate": "1",
+        "client_trade_id": "reported-custom-fee",
+    })
+    assert reported.status_code == 201
+    assert reported.json()["executions"][0]["commission"] == "0.43"
+
+
 def test_fastapi_routes_match_canonical_openapi_operation_ids():
     client, _ = build_client()
     generated = client.get("/openapi.json").json()

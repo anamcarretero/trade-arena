@@ -18,7 +18,8 @@ const portfolio = {
   orders: [{
     id: "o1", symbol: "AAPL", side: "buy", quantity: "2", order_type: "market",
     allow_extended_hours: false, limit_price: null, status: "filled",
-    rejection_reason: null, submitted_at: "2026-09-02T14:30:00Z"
+    rejection_reason: null, submitted_at: "2026-09-02T14:30:00Z",
+    commission: "1.15"
   }],
   executions: [{
     id: "e1", order_id: "o1", symbol: "AAPL", side: "buy", quantity: "2",

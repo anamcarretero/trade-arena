@@ -160,10 +160,12 @@ export async function submitOrder(formData: FormData) {
   const orderType = String(formData.get("order_type") ?? "");
   const quantity = String(formData.get("quantity") ?? "").trim();
   const rawLimit = String(formData.get("limit_price") ?? "").trim();
+  const commission = String(formData.get("commission") ?? "").trim();
   if (!/^[A-Z][A-Z0-9.-]{0,15}$/.test(symbol) ||
       !["buy", "sell"].includes(side) ||
       !["market", "limit"].includes(orderType) ||
-      !/^\d+(?:\.\d{1,8})?$/.test(quantity)) {
+      !/^\d+(?:\.\d{1,8})?$/.test(quantity) ||
+      (commission !== "" && !/^\d+(?:[.,]\d{1,2})?$/.test(commission))) {
     redirect(`${destination}?error=order`);
   }
   const response = await apiFetch(
@@ -174,6 +176,7 @@ export async function submitOrder(formData: FormData) {
         symbol, side, quantity, order_type: orderType,
         allow_extended_hours: formData.get("allow_extended_hours") === "on",
         limit_price: orderType === "limit" ? rawLimit : null,
+        commission: commission || null,
         client_order_id: crypto.randomUUID()
       })
     }
@@ -197,13 +200,15 @@ export async function reportTrade(formData: FormData) {
   const quantity = String(formData.get("quantity") ?? "").trim();
   const pricePerShare = String(formData.get("price_per_share") ?? "").trim();
   const totalAmount = String(formData.get("total_amount") ?? "").trim();
+  const commission = String(formData.get("commission") ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(date) ||
       !["Europe/Madrid", "UTC"].includes(timezone) ||
       !/^[A-Z][A-Z0-9.-]{0,15}$/.test(ticker) ||
       !["buy", "sell"].includes(type) ||
       !/^\d+(?:\.\d{1,8})?$/.test(quantity) ||
       !/^\d+(?:[.,]\d{1,4})?$/.test(pricePerShare) ||
-      !/^\d+(?:[.,]\d{1,2})?$/.test(totalAmount)) {
+      !/^\d+(?:[.,]\d{1,2})?$/.test(totalAmount) ||
+      (commission !== "" && !/^\d+(?:[.,]\d{1,2})?$/.test(commission))) {
     redirect(`${destination}?error=reported-trade`);
   }
   const response = await apiFetch(
@@ -213,6 +218,7 @@ export async function reportTrade(formData: FormData) {
       body: JSON.stringify({
         date: `${date}:00`, timezone, ticker, type, quantity,
         price_per_share: pricePerShare, total_amount: totalAmount,
+        commission: commission || null,
         currency: "USD", fx_rate: "1",
         client_trade_id: crypto.randomUUID()
       })

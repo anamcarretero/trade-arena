@@ -479,11 +479,14 @@ components:
         allow_extended_hours: {type: boolean}
         limit_price:
           oneOf: [{type: string, pattern: '^\d+(\.\d{1,4})?$'}, {type: "null"}]
+        commission:
+          description: Comisión elegida por el usuario; si se omite se aplica la comisión fijada en rules_snapshot al ejecutarse.
+          oneOf: [{type: string, pattern: '^\d+(?:[.,]\d{1,2})?$'}, {type: "null"}]
         client_order_id:
           oneOf: [{type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9-]+$'}, {type: "null"}]
     Order:
       type: object
-      required: [id, symbol, side, quantity, order_type, allow_extended_hours, limit_price, status, rejection_reason, submitted_at]
+      required: [id, symbol, side, quantity, order_type, allow_extended_hours, limit_price, status, rejection_reason, submitted_at, commission]
       properties:
         id: {type: string}
         symbol: {type: string}
@@ -495,6 +498,7 @@ components:
         status: {type: string, enum: [pending, filled, rejected, cancelled]}
         rejection_reason: {oneOf: [{type: string}, {type: "null"}]}
         submitted_at: {type: string, format: date-time}
+        commission: {oneOf: [{type: string}, {type: "null"}]}
     Execution:
       type: object
       required: [id, order_id, symbol, side, quantity, price, commission, session, executed_at, source, total_amount, currency, fx_rate, correction_of]
@@ -552,6 +556,9 @@ components:
         quantity: {type: string, pattern: '^\d+(?:\.\d{1,8})?$'}
         price_per_share: {type: string, pattern: '^\d+(?:[.,]\d{1,4})?$'}
         total_amount: {type: string, pattern: '^\d+(?:[.,]\d{1,2})?$'}
+        commission:
+          description: Opcional; si se omite se infiere del precio, cantidad, tipo e importe total.
+          oneOf: [{type: string, pattern: '^\d+(?:[.,]\d{1,2})?$'}, {type: "null"}]
         currency: {type: string, enum: [USD]}
         fx_rate: {type: string, pattern: '^1(?:\.0{1,8})?$'}
         client_trade_id: {type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9-]+$'}

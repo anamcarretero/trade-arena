@@ -155,7 +155,7 @@ deterministas y obtienen el mismo ranking reproducible.
 
 ### Ampliación TA-035 — fracciones y ejecuciones registradas manualmente
 
-**Estado:** completada con la migración 006, API/BFF/PWA bilingüe y pruebas
+**Estado:** completada con las migraciones 006 y 007, API/BFF/PWA bilingüe y pruebas
 reproducibles en memoria y PostgreSQL 16.
 
 1. Sustituir cantidades enteras por cantidades decimales positivas de hasta
@@ -172,10 +172,12 @@ reproducibles en memoria y PostgreSQL 16.
    dentro del calendario inmutable y no precede a la incorporación del
    participante; y que los registros se introducen cronológicamente respecto
    al último evento de la cartera.
-4. En v1 exigir `Currency = USD` y `FX Rate = 1`. Normalizar importes con
-   `Decimal` y comprobar que `Total Amount` coincide al céntimo con cantidad por
-   precio y una de las comisiones del snapshot: suma para compra y resta para
-   venta. Rechazar sin mutaciones si falta saldo, posición o coherencia.
+4. En v1 exigir `Currency = USD` y `FX Rate = 1`. Admitir una comisión opcional
+   tanto en órdenes como en operaciones declaradas. Una orden sin comisión usa
+   al ejecutarse el respaldo del snapshot. En una declaración sin comisión,
+   inferirla del bruto y `Total Amount`; si se proporciona, comprobar al céntimo
+   la suma para compra o resta para venta. Rechazar sin mutaciones si falta
+   saldo, posición o coherencia.
 5. Crear atómicamente una orden ya ejecutada, una ejecución completa con
    `source=reported`, apuntes balanceados de ledger y auditoría. Una repetición
    con la misma clave por cartera devuelve el mismo resultado sin duplicar
@@ -184,8 +186,9 @@ reproducibles en memoria y PostgreSQL 16.
    corrección posterior usa un evento compensatorio explícito y auditable.
 7. Añadir a la PWA un formulario responsive ES/EN y distinguir en cartera e
    historial las ejecuciones `fixture` y `reported`. TypeScript solo recoge y
-   presenta datos; saldo, posición, comisión, redondeo y rentabilidad continúan
-   en Python.
+   presenta datos y puede sugerir la diferencia aritmética en el campo de
+   comisión; saldo, posición, validación financiera, redondeo y rentabilidad
+   continúan en Python.
 8. Añadir pruebas de dominio y aplicación, contrato MemoryStore/PostgresStore,
    migración desde `005_trading_ranking`, autorización `404`, precisión de
    fracciones, redondeos, orden temporal, saldo/posición, ledger, idempotencia,

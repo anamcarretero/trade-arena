@@ -256,11 +256,11 @@ class MemoryTrading:
                     candidate.id, candidate.symbol, candidate.side,
                     candidate.quantity, candidate.order_type,
                     candidate.allow_extended_hours, candidate.submitted_at,
-                    candidate.limit_price,
+                    candidate.limit_price, candidate.commission,
                 ) != (
                     order.id, order.symbol, order.side, order.quantity,
                     order.order_type, order.allow_extended_hours,
-                    order.submitted_at, order.limit_price,
+                    order.submitted_at, order.limit_price, order.commission,
                 ):
                     raise ValueError("las órdenes financieras son inmutables")
         self.store._trading[key] = copy.deepcopy(account)

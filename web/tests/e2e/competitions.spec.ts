@@ -32,9 +32,10 @@ test("an owner creates and starts a competition with immutable ES/EN confirmatio
   const orderForm = page.getByRole("heading", {name: "Nueva orden"}).locator("..");
   await orderForm.getByLabel("Símbolo").fill("AAPL");
   await orderForm.getByLabel("Cantidad (hasta 8 decimales)").fill("2");
+  await orderForm.getByLabel("Comisión (opcional)").fill("0,75");
   await page.getByRole("button", {name: /Enviar orden/}).click();
   await expect(page.getByText("Orden enviada.")).toBeVisible();
-  await expect(page.getByText("2798.85 USD")).toBeVisible();
+  await expect(page.getByText("2799.25 USD")).toBeVisible();
   await expect(page.getByText("Ejecutada", {exact: true})).toBeVisible();
   await expect(page.getByText("Ejecutada por fixture de mercado")).toBeVisible();
 
@@ -45,6 +46,7 @@ test("an owner creates and starts a competition with immutable ES/EN confirmatio
   await reportedForm.getByLabel("Cantidad (hasta 8 decimales)").fill("1");
   await reportedForm.getByLabel("Precio por acción (USD)").fill("855,70");
   await reportedForm.getByLabel("Importe total (USD)").fill("856,85");
+  await expect(reportedForm.getByLabel("Comisión (opcional)")).toHaveValue("1.15");
   await reportedForm.getByRole("button", {name: /Registrar operación/}).click();
   await expect(page.getByText("Operación declarada registrada")).toBeVisible();
   await expect(page.getByText("Declarada por el usuario")).toBeVisible();

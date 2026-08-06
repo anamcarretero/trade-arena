@@ -157,6 +157,7 @@ def test_reported_trade_validates_total_chronology_cash_position_and_usd(context
     with pytest.raises(Exception, match="total"):
         trading.report_trade(**{
             **common, "total_amount": "100.98", "client_trade_id": "bad-total",
+            "commission_value": "1.15",
         })
     with pytest.raises(Conflict, match="posición"):
         trading.report_trade(**{
@@ -165,6 +166,30 @@ def test_reported_trade_validates_total_chronology_cash_position_and_usd(context
             "occurred_at": T0 + timedelta(minutes=2),
             "now": T0 + timedelta(minutes=2),
         })
+
+
+def test_user_commission_overrides_order_default_and_reported_fee_is_inferred(context):
+    _, _, owner, _, league, competition, trading = context
+    order_result = trading.submit_order(
+        owner.id, league.id, competition.id, "AAPL", "buy", 1, "market",
+        False, None, T0 + timedelta(minutes=1), "custom-fee", "0.75",
+    )
+    assert order_result.orders[0].commission == "0.75"
+    filled = trading.portfolio(
+        owner.id, league.id, competition.id, T0 + timedelta(minutes=3)
+    )
+    assert filled.executions[0].commission == "0.75"
+    assert filled.cash == "2898.25"
+
+    reported = trading.report_trade(
+        owner.id, league.id, competition.id,
+        occurred_at=T0 + timedelta(minutes=4), symbol="AAPL", side="buy",
+        quantity_value="1", price_per_share="100", total_amount="100.43",
+        currency="USD", fx_rate="1", client_trade_id="inferred-fee",
+        now=T0 + timedelta(minutes=4),
+    )
+    assert reported.executions[-1].commission == "0.43"
+    assert reported.orders[-1].commission == "0.43"
 
 
 def test_reported_trade_correction_is_compensating_not_destructive(context):

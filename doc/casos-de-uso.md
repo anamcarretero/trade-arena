@@ -133,9 +133,10 @@ TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
    campos y una clave idempotente; FastAPI vuelve a validar sesión,
    pertenencia, calendario y reglas.
 4. El backend consulta únicamente fixtures del puerto de mercado en esta fase.
-   Ordena cotizaciones e ignora cualquiera anterior a la orden. Una ejecución
-   siempre cubre toda la cantidad y carga `1.15 USD` en regular o `2.99 USD` en
-   ampliada, según el snapshot.
+   Ordena cotizaciones e ignora cualquiera anterior a la orden. El formulario
+   admite una comisión opcional no negativa. Una ejecución siempre cubre toda
+   la cantidad y usa esa comisión; si se omitió, carga `1.15 USD` en regular o
+   `2.99 USD` en ampliada, según el snapshot.
 5. Si falta efectivo o posición, la orden se rechaza sin ejecución ni comisión.
    No existe corto, margen ni ejecución parcial. Una orden pendiente
    es GTC hasta ejecución, cancelación, fin o suspensión definitiva.
@@ -150,8 +151,8 @@ TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
 
 1. Un participante registra desde la PWA una ejecución simulada ya realizada
    mediante fecha/hora con Madrid por defecto o UTC, ticker, compra/venta,
-   cantidad de hasta ocho decimales, precio por acción, importe total, USD,
-   FX 1 y clave idempotente.
+   cantidad de hasta ocho decimales, precio por acción, importe total, comisión
+   opcional, USD, FX 1 y clave idempotente.
    No se crea primero una orden pendiente ni se envía nada al mercado.
    Precio e importe admiten coma o punto decimal; el backend los normaliza
    antes de aplicar las reglas financieras.
@@ -159,15 +160,18 @@ TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
    carteras u operaciones ajenas. La competición debe estar activa; la fecha no
    puede ser futura, queda dentro del calendario fijado, no precede a la
    incorporación y no retrocede respecto a la última ejecución de la cartera.
-3. El backend redondea el bruto al céntimo y exige que el total sea cantidad ×
-   precio más una comisión del snapshot para compra, o menos esa comisión para
-   venta. USD/FX 1, saldo y posición se validan antes de mutar nada.
+3. Si la comisión queda vacía, la PWA sugiere en su campo la diferencia entre
+   bruto y total. El backend vuelve a calcularla con `Decimal`: en compra es
+   total menos cantidad × precio y en venta es cantidad × precio menos total.
+   Si se proporciona una comisión, debe ser no negativa y coincidir al céntimo.
+   USD/FX 1, saldo y posición se validan antes de mutar nada.
 4. El éxito persiste en la misma transacción una orden ya `filled`, ejecución
    completa `source=reported`, ledger balanceado y auditoría. Repetir la misma
    clave y payload devuelve la cartera existente sin duplicar ningún registro.
 5. El historial etiqueta `fixture` para ejecuciones de mercado y `reported`
-   para declaraciones del usuario. TypeScript presenta esos datos pero no
-   calcula comisiones, totales, saldo, posición ni rentabilidad.
+   para declaraciones del usuario. El cálculo de TypeScript solo completa el
+   campo como ayuda; Python es la autoridad sobre comisión, total, saldo,
+   posición y rentabilidad.
 6. Corregir una declaración crea una orden, ejecución y asiento inversos con
    `correction_of`; el original permanece visible. Una operación ya compensada
    no admite una segunda corrección, y nunca existe edición o borrado

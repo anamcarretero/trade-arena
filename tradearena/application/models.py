@@ -170,6 +170,7 @@ class OrderView:
     status: str
     rejection_reason: str | None
     submitted_at: datetime
+    commission: str | None
 
 
 @dataclass(frozen=True)

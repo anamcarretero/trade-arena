@@ -75,11 +75,12 @@ def _exercise_application_contract(store):
     assert portfolio.joined_late is True
     trading.submit_order(
         owner.id, league.id, competition.id, "AAPL", "buy", 1, "market",
-        False, None, NOW + timedelta(days=1, seconds=1), str(uuid4()),
+        False, None, NOW + timedelta(days=1, seconds=1), str(uuid4()), "0.75",
     )
     filled = trading.portfolio(owner.id, league.id, competition.id, quote_time)
-    assert filled.cash == "2898.85"
-    assert filled.executions[0].commission == "1.15"
+    assert filled.cash == "2899.25"
+    assert filled.orders[0].commission == "0.75"
+    assert filled.executions[0].commission == "0.75"
     reported = trading.report_trade(
         member.id, league.id, competition.id, occurred_at=quote_time,
         symbol="MSFT", side="buy", quantity_value="0.12345678",
@@ -129,7 +130,7 @@ def postgres_store():
         assert migrate(dsn) == [
             "001_initial", "002_auth0_identity", "003_league_reads",
             "004_competitions", "005_trading_ranking",
-            "006_fractional_reported_trades",
+            "006_fractional_reported_trades", "007_user_commissions",
         ]
         assert migrate(dsn) == []
         yield PostgresStore(dsn)
@@ -173,6 +174,7 @@ def test_auth0_migration_upgrades_the_previous_schema(postgres_store, tmp_path):
         assert migrate(previous_dsn) == [
             "002_auth0_identity", "003_league_reads", "004_competitions",
             "005_trading_ranking", "006_fractional_reported_trades",
+            "007_user_commissions",
         ]
         assert migrate(previous_dsn) == []
     finally:
@@ -197,7 +199,8 @@ def test_trading_migration_upgrades_ta034_schema(postgres_store, tmp_path):
             "004_competitions",
         ]
         assert migrate(previous_dsn) == [
-            "005_trading_ranking", "006_fractional_reported_trades"
+            "005_trading_ranking", "006_fractional_reported_trades",
+            "007_user_commissions",
         ]
     finally:
         with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
@@ -220,7 +223,9 @@ def test_fractional_reported_migration_upgrades_ta035_schema(postgres_store, tmp
             "001_initial", "002_auth0_identity", "003_league_reads",
             "004_competitions", "005_trading_ranking",
         ]
-        assert migrate(previous_dsn) == ["006_fractional_reported_trades"]
+        assert migrate(previous_dsn) == [
+            "006_fractional_reported_trades", "007_user_commissions"
+        ]
         with psycopg.connect(previous_dsn, row_factory=psycopg.rows.dict_row) as connection:
             columns = connection.execute(
                 """
@@ -228,7 +233,7 @@ def test_fractional_reported_migration_upgrades_ta035_schema(postgres_store, tmp
                   FROM information_schema.columns
                  WHERE table_schema = current_schema()
                    AND table_name IN ('orders', 'executions', 'portfolio_positions')
-                   AND column_name IN ('quantity', 'source', 'total_amount')
+                   AND column_name IN ('quantity', 'source', 'total_amount', 'commission')
                 """
             ).fetchall()
         quantity_columns = [row for row in columns if row["column_name"] == "quantity"]
@@ -236,6 +241,9 @@ def test_fractional_reported_migration_upgrades_ta035_schema(postgres_store, tmp
         assert all(row["data_type"] == "numeric" and row["numeric_scale"] == 8
                    for row in quantity_columns)
         assert {row["column_name"] for row in columns} >= {"source", "total_amount"}
+        commission = next(row for row in columns if row["column_name"] == "commission")
+        assert commission["data_type"] == "numeric"
+        assert commission["numeric_scale"] == 2
     finally:
         with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
             admin.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))

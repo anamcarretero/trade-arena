@@ -506,7 +506,7 @@ class PostgresTrading(_Repository):
             item["quantity"], OrderType(item["order_type"]),
             item["allow_extended_hours"], item["submitted_at"],
             item["limit_price"], OrderStatus(item["status"]),
-            item["rejection_reason"],
+            item["rejection_reason"], item["commission"],
         ) for item in order_rows}
         execution_rows = self.connection.execute(
             """
@@ -607,15 +607,15 @@ class PostgresTrading(_Repository):
                 INSERT INTO orders(
                     id, portfolio_id, instrument_id, side, order_type, quantity,
                     limit_price, allow_extended_hours, status, submitted_at,
-                    rejection_reason
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    rejection_reason, commission
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status,
                     rejection_reason = EXCLUDED.rejection_reason
                 """,
                 (order.id, portfolio.id, instrument_id, order.side.value,
                  order.order_type.value, order.quantity, order.limit_price,
                  order.allow_extended_hours, order.status.value,
-                 order.submitted_at, order.rejection_reason),
+                 order.submitted_at, order.rejection_reason, order.commission),
             )
         for execution in portfolio.executions:
             existing = self.connection.execute(

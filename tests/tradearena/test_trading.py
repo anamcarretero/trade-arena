@@ -58,6 +58,21 @@ def test_extended_execution_costs_299_when_enabled():
     assert portfolio.cash == Decimal("797.01")
 
 
+def test_order_uses_user_commission_instead_of_snapshot_default():
+    portfolio = Portfolio("p1", Decimal("1000"))
+    engine = TradingEngine()
+    custom = order()
+    custom = Order(
+        custom.id, custom.symbol, custom.side, custom.quantity,
+        custom.order_type, custom.allow_extended_hours, custom.submitted_at,
+        commission=Decimal("0.75"),
+    )
+    engine.submit(portfolio, custom)
+    execution, = engine.process_quote(portfolio, quote())
+    assert execution.commission == Decimal("0.75")
+    assert portfolio.cash == Decimal("799.25")
+
+
 @pytest.mark.parametrize(
     ("side", "quoted", "crosses"),
     [

@@ -3,6 +3,7 @@ import {copy, type Locale} from "../lib/i18n";
 import {
   cancelOrder, correctReportedTrade, reportTrade, submitOrder
 } from "../app/[locale]/app/leagues/actions";
+import {CommissionField} from "./commission-field";
 
 export function TradingPanel({locale, leagueId, competitionId, portfolio, ranking}: {
   locale: Locale;
@@ -35,6 +36,7 @@ export function TradingPanel({locale, leagueId, competitionId, portfolio, rankin
           <label>{text.shares}<input name="quantity" type="number" min="0.00000001" step="0.00000001" required/></label>
           <label>{text.orderType}<select name="order_type"><option value="market">{text.marketOrder}</option><option value="limit">{text.limitOrder}</option></select></label>
           <label>{text.limitPrice}<input name="limit_price" inputMode="decimal" pattern="\d+(\.\d{1,4})?"/></label>
+          <label>{text.optionalCommission}<input name="commission" inputMode="decimal" pattern="[0-9]+([.,][0-9]{1,2})?"/><small>{text.orderCommissionHelp}</small></label>
           <label className="checkbox-row"><input name="allow_extended_hours" type="checkbox"/>{text.extendedHours}</label>
           <button className="primary" type="submit">{text.submitOrder}<span aria-hidden="true">→</span></button>
         </form>
@@ -51,6 +53,7 @@ export function TradingPanel({locale, leagueId, competitionId, portfolio, rankin
           <label>{text.shares}<input name="quantity" type="number" min="0.00000001" step="0.00000001" required/></label>
           <label>{text.pricePerShare}<input name="price_per_share" inputMode="decimal" pattern="[0-9]+([.,][0-9]{1,4})?" required/></label>
           <label>{text.totalAmount}<input name="total_amount" inputMode="decimal" pattern="[0-9]+([.,][0-9]{1,2})?" required/></label>
+          <CommissionField label={text.optionalCommission} help={text.commissionAutoHelp}/>
           <div className="reported-constants"><span>{text.currency}: <strong>USD</strong></span><span>{text.fxRate}: <strong>1</strong></span></div>
           <button className="primary" type="submit">{text.reportTrade}<span aria-hidden="true">→</span></button>
         </form>

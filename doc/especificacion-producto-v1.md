@@ -13,8 +13,9 @@ una simulación educativa sin dinero, premios, retiradas ni conexión a bróker.
 - Una cartera nace con un único abono de capital virtual. Su retorno es
   `(valor actual / capital inicial) - 1`; el ranking ordena ese porcentaje y
   desempata por el identificador estable del usuario.
-- Cada ejecución crea un asiento inmutable y balanceado. La comisión es 1,15
-  USD en sesión regular o 2,99 USD en sesión ampliada.
+- Cada ejecución crea un asiento inmutable y balanceado. La orden admite una
+  comisión no negativa elegida por el usuario; si se omite, usa 1,15 USD en
+  sesión regular o 2,99 USD en sesión ampliada como respaldo del snapshot.
 - Una orden es de mercado o límite y opta expresamente por sesión regular o
   por regular más ampliada. Nunca hay ejecución parcial, corto ni margen.
 - Una orden de mercado pendiente cruza con la primera cotización elegible. Una
@@ -49,9 +50,10 @@ una simulación educativa sin dinero, premios, retiradas ni conexión a bróker.
   FX 1, y conserva fecha, zona horaria, precio, total y comisión para auditoría.
   La captura permite hora de Madrid por defecto o UTC y acepta coma o punto
   como separador decimal.
-- El total debe coincidir al céntimo con cantidad × precio y una comisión del
-  snapshot. La ejecución es completa y respeta calendario, incorporación,
-  cronología, saldo, posición, corto y margen.
+- La comisión declarada es opcional. Si falta, se infiere al céntimo de la
+  diferencia entre cantidad × precio y total según compra o venta; si existe,
+  debe coincidir con ellos. La ejecución es completa y respeta calendario,
+  incorporación, cronología, saldo, posición, corto y margen.
 - Las ejecuciones del motor se etiquetan `fixture` y las declaradas
   `reported`. Corregir crea movimientos compensatorios enlazados; una
   ejecución financiera nunca se edita ni se borra.
