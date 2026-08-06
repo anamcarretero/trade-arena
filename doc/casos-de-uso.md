@@ -239,8 +239,8 @@ Es el flujo preferente porque no concede acceso al repositorio.
    `PLAYER_EMAILS`, con el mapa `id -> {email, name, currency, show_amounts}`.
 2. El jugador exporta el CSV desde Revolut y lo envía como adjunto al buzón
    privado desde esa dirección registrada.
-3. `inbox.yml` se activa por el timbre de Gmail (`repository_dispatch`) o por
-   el cron de respaldo y ejecuta `python -m trader inbox`.
+3. `inbox.yml` se activa por el timbre de Gmail (`repository_dispatch`) o
+   manualmente y ejecuta `python -m trader inbox`.
 4. `inbox.py` lee mensajes no vistos, comprueba que la dirección pertenece al
    mapa y valida `Authentication-Results`: acepta DMARC aprobado o DKIM
    aprobado alineado con el dominio del remitente.
@@ -280,9 +280,9 @@ persona. No usar esta vía para otorgar acceso amplio a usuarios no confiables.
 
 ## 3. Recalcular la competición
 
-El ranking se actualiza automáticamente en horario de mercado estadounidense,
-después del cierre, al cambiar `players/**` o `trader/**`, y bajo demanda desde
-Actions. El administrador puede reproducirlo localmente:
+El ranking se actualiza al cambiar `players/**` o `trader/**`, mediante el
+evento `extracto-subido`, y bajo demanda desde Actions. El administrador puede
+reproducirlo localmente:
 
 ```bash
 python -m trader ranking --refresh

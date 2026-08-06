@@ -372,8 +372,8 @@ ranking, `rebase_from` reinicia esta composición en `COMPETITION_START`.
 | Workflow | Disparador | Responsabilidad |
 |---|---|---|
 | `.github/workflows/ci.yml` | cada pull request | instala dependencias, prueba PostgreSQL 16 y migraciones, construye y verifica la instalación Compose desde cero, ejecuta toda la suite Python y reproduce el ranking histórico offline con datos ficticios |
-| `.github/workflows/inbox.yml` | `repository_dispatch`, cron cada ~15 min o manual | lee IMAP, autentica, cifra extractos, recalcula y publica si hubo cambios |
-| `.github/workflows/ranking.yml` | horario de mercado, cierre, cambios en `players/` o `trader/`, dispatch o manual | ejecuta tests, actualiza precios/analistas, genera artefactos y abre/cierra aviso de extractos no descifrables |
+| `.github/workflows/inbox.yml` | `repository_dispatch` o manual | lee IMAP, autentica, cifra extractos, recalcula y publica si hubo cambios |
+| `.github/workflows/ranking.yml` | cambios en `players/` o `trader/`, dispatch o manual | ejecuta tests, actualiza precios/analistas, genera artefactos y abre/cierra aviso de extractos no descifrables |
 | `.github/workflows/guard.yml` | push a `main` | para la vía de token, revierte cambios fuera de la carpeta del jugador asignado en `PLAYER_OWNERS` |
 
 Los workflows de ingesta y ranking usan grupos de concurrencia y reintentos de
