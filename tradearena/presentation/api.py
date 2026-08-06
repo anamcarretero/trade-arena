@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from enum import Enum
 from typing import Callable
+from zoneinfo import ZoneInfo
 
 from tradearena.application.services import (
     ApplicationError, Conflict, Forbidden, InvalidInput, NotFound,
@@ -34,6 +35,16 @@ def _json(value):
     if isinstance(value, (list, tuple)):
         return [_json(item) for item in value]
     return value
+
+
+def _reported_datetime(value: object, timezone_name: object) -> datetime:
+    name = str(timezone_name or "Europe/Madrid")
+    if name not in {"Europe/Madrid", "UTC"}:
+        raise InvalidInput("zona horaria no soportada")
+    result = datetime.fromisoformat(str(value))
+    if result.tzinfo is None:
+        result = result.replace(tzinfo=ZoneInfo(name))
+    return result
 
 
 class Api:
@@ -155,7 +166,9 @@ class Api:
                     and route[6] == "corrections" and method == "POST":
                 result = self.trading.correct_reported_trade(
                     actor, route[1], route[3], route[5],
-                    occurred_at=datetime.fromisoformat(str(body["date"])),
+                    occurred_at=_reported_datetime(
+                        body["date"], body.get("timezone", "Europe/Madrid")
+                    ),
                     client_trade_id=str(body.get("client_trade_id", "")),
                     now=now,
                 )
@@ -165,12 +178,14 @@ class Api:
                     and route[4] == "reported-trades" and method == "POST":
                 result = self.trading.report_trade(
                     actor, route[1], route[3],
-                    occurred_at=datetime.fromisoformat(str(body["date"])),
+                    occurred_at=_reported_datetime(
+                        body["date"], body.get("timezone", "Europe/Madrid")
+                    ),
                     symbol=str(body.get("ticker", "")),
                     side=str(body.get("type", "")),
                     quantity_value=str(body.get("quantity", "")),
-                    price_per_share=str(body.get("price_per_share", "")),
-                    total_amount=str(body.get("total_amount", "")),
+                    price_per_share=str(body.get("price_per_share", "")).replace(",", "."),
+                    total_amount=str(body.get("total_amount", "")).replace(",", "."),
                     currency=str(body.get("currency", "")),
                     fx_rate=str(body.get("fx_rate", "")),
                     client_trade_id=str(body.get("client_trade_id", "")),

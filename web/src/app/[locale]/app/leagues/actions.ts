@@ -191,17 +191,19 @@ export async function reportTrade(formData: FormData) {
   const competitionId = reference(formData, "competition_id");
   const destination = leaguePath(locale, leagueId);
   const date = String(formData.get("date") ?? "");
+  const timezone = String(formData.get("timezone") ?? "Europe/Madrid");
   const ticker = String(formData.get("ticker") ?? "").trim().toUpperCase();
   const type = String(formData.get("type") ?? "");
   const quantity = String(formData.get("quantity") ?? "").trim();
   const pricePerShare = String(formData.get("price_per_share") ?? "").trim();
   const totalAmount = String(formData.get("total_amount") ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(date) ||
+      !["Europe/Madrid", "UTC"].includes(timezone) ||
       !/^[A-Z][A-Z0-9.-]{0,15}$/.test(ticker) ||
       !["buy", "sell"].includes(type) ||
       !/^\d+(?:\.\d{1,8})?$/.test(quantity) ||
-      !/^\d+(?:\.\d{1,4})?$/.test(pricePerShare) ||
-      !/^\d+(?:\.\d{1,2})?$/.test(totalAmount)) {
+      !/^\d+(?:[.,]\d{1,4})?$/.test(pricePerShare) ||
+      !/^\d+(?:[.,]\d{1,2})?$/.test(totalAmount)) {
     redirect(`${destination}?error=reported-trade`);
   }
   const response = await apiFetch(
@@ -209,7 +211,7 @@ export async function reportTrade(formData: FormData) {
     {
       method: "POST",
       body: JSON.stringify({
-        date: `${date}:00Z`, ticker, type, quantity,
+        date: `${date}:00`, timezone, ticker, type, quantity,
         price_per_share: pricePerShare, total_amount: totalAmount,
         currency: "USD", fx_rate: "1",
         client_trade_id: crypto.randomUUID()

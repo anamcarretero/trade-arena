@@ -13,7 +13,7 @@ una simulación educativa sin dinero, premios, retiradas ni conexión a bróker.
 - Una cartera nace con un único abono de capital virtual. Su retorno es
   `(valor actual / capital inicial) - 1`; el ranking ordena ese porcentaje y
   desempata por el identificador estable del usuario.
-- Cada ejecución crea un asiento inmutable y balanceado. La comisión es 0,99
+- Cada ejecución crea un asiento inmutable y balanceado. La comisión es 1,15
   USD en sesión regular o 2,99 USD en sesión ampliada.
 - Una orden es de mercado o límite y opta expresamente por sesión regular o
   por regular más ampliada. Nunca hay ejecución parcial, corto ni margen.
@@ -46,7 +46,9 @@ una simulación educativa sin dinero, premios, retiradas ni conexión a bróker.
 
 - `reported-trades` registra una ejecución ya realizada dentro de la
   simulación; no importa ni custodia operaciones de un broker. V1 exige USD y
-  FX 1, y conserva fecha, precio, total y comisión para auditoría.
+  FX 1, y conserva fecha, zona horaria, precio, total y comisión para auditoría.
+  La captura permite hora de Madrid por defecto o UTC y acepta coma o punto
+  como separador decimal.
 - El total debe coincidir al céntimo con cantidad × precio y una comisión del
   snapshot. La ejecución es completa y respeta calendario, incorporación,
   cronología, saldo, posición, corto y margen.

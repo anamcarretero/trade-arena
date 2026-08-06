@@ -25,7 +25,7 @@ def quote(value="100", *, session=Session.REGULAR, minute=1):
     return Quote("AAPL", Decimal(value), T0 + timedelta(minutes=minute), session)
 
 
-def test_regular_market_execution_is_complete_and_charges_099():
+def test_regular_market_execution_is_complete_and_charges_115():
     portfolio = Portfolio("p1", Decimal("1000"))
     engine = TradingEngine()
     engine.submit(portfolio, order())
@@ -33,8 +33,8 @@ def test_regular_market_execution_is_complete_and_charges_099():
 
     assert len(executions) == 1
     assert executions[0].quantity == 2
-    assert executions[0].commission == Decimal("0.99")
-    assert portfolio.cash == Decimal("799.01")
+    assert executions[0].commission == Decimal("1.15")
+    assert portfolio.cash == Decimal("798.85")
     assert portfolio.positions == {"AAPL": 2}
     assert portfolio.orders["o1"].status is OrderStatus.FILLED
     assert all(sum((p.amount for p in entry.postings), Decimal("0")) == 0
@@ -122,7 +122,7 @@ def test_same_inputs_produce_identical_portfolio_and_ranking_snapshots():
     ranking_a = build_ranking("c1", first.as_of, [("u1", first, False)])
     ranking_b = build_ranking("c1", second.as_of, [("u1", second, False)])
     assert ranking_a == ranking_b
-    assert first.cumulative_return == Decimal("0.019010000000")
+    assert first.cumulative_return == Decimal("0.018850000000")
 
 
 def test_float_money_is_rejected_to_avoid_platform_rounding():
@@ -138,7 +138,7 @@ def test_fractional_shares_up_to_eight_decimals_execute_completely():
 
     assert execution.quantity == Decimal("0.12345678")
     assert portfolio.positions["AAPL"] == Decimal("0.12345678")
-    assert portfolio.cash == Decimal("986.66")
+    assert portfolio.cash == Decimal("986.50")
 
 
 def test_fractional_shares_reject_more_than_eight_decimals_and_float_input():

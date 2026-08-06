@@ -134,7 +134,7 @@ TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
    pertenencia, calendario y reglas.
 4. El backend consulta únicamente fixtures del puerto de mercado en esta fase.
    Ordena cotizaciones e ignora cualquiera anterior a la orden. Una ejecución
-   siempre cubre toda la cantidad y carga `0.99 USD` en regular o `2.99 USD` en
+   siempre cubre toda la cantidad y carga `1.15 USD` en regular o `2.99 USD` en
    ampliada, según el snapshot.
 5. Si falta efectivo o posición, la orden se rechaza sin ejecución ni comisión.
    No existe corto, margen ni ejecución parcial. Una orden pendiente
@@ -149,9 +149,12 @@ TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
 ### Operaciones declaradas y correcciones de la ampliación TA-035
 
 1. Un participante registra desde la PWA una ejecución simulada ya realizada
-   mediante fecha/hora UTC, ticker, compra/venta, cantidad de hasta ocho
-   decimales, precio por acción, importe total, USD, FX 1 y clave idempotente.
+   mediante fecha/hora con Madrid por defecto o UTC, ticker, compra/venta,
+   cantidad de hasta ocho decimales, precio por acción, importe total, USD,
+   FX 1 y clave idempotente.
    No se crea primero una orden pendiente ni se envía nada al mercado.
+   Precio e importe admiten coma o punto decimal; el backend los normaliza
+   antes de aplicar las reglas financieras.
 2. FastAPI vuelve a autenticar y Python oculta con `404` ligas, competiciones,
    carteras u operaciones ajenas. La competición debe estar activa; la fecha no
    puede ser futura, queda dentro del calendario fijado, no precede a la

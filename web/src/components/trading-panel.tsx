@@ -30,7 +30,7 @@ export function TradingPanel({locale, leagueId, competitionId, portfolio, rankin
         <h4>{text.newOrder}</h4>
         <form action={submitOrder} className="order-form">
           <References locale={locale} leagueId={leagueId} competitionId={competitionId}/>
-          <label>{text.symbol}<input name="symbol" required maxLength={16} pattern="[A-Za-z][A-Za-z0-9.-]*" autoCapitalize="characters"/></label>
+          <label>{text.symbol}<input name="symbol" required maxLength={16} pattern="[A-Za-z][A-Za-z0-9.\-]*" autoCapitalize="characters"/></label>
           <label>{text.side}<select name="side"><option value="buy">{text.buy}</option><option value="sell">{text.sell}</option></select></label>
           <label>{text.shares}<input name="quantity" type="number" min="0.00000001" step="0.00000001" required/></label>
           <label>{text.orderType}<select name="order_type"><option value="market">{text.marketOrder}</option><option value="limit">{text.limitOrder}</option></select></label>
@@ -45,11 +45,12 @@ export function TradingPanel({locale, leagueId, competitionId, portfolio, rankin
         <form action={reportTrade} className="order-form">
           <References locale={locale} leagueId={leagueId} competitionId={competitionId}/>
           <label>{text.tradeDate}<input name="date" type="datetime-local" required/></label>
-          <label>{text.symbol}<input name="ticker" required maxLength={16} pattern="[A-Za-z][A-Za-z0-9.-]*" autoCapitalize="characters"/></label>
+          <label>{text.timezone}<select name="timezone" defaultValue="Europe/Madrid"><option value="Europe/Madrid">{text.madridTime}</option><option value="UTC">{text.utcTime}</option></select></label>
+          <label>{text.symbol}<input name="ticker" required maxLength={16} pattern="[A-Za-z][A-Za-z0-9.\-]*" autoCapitalize="characters"/></label>
           <label>{text.side}<select name="type"><option value="buy">{text.buy}</option><option value="sell">{text.sell}</option></select></label>
           <label>{text.shares}<input name="quantity" type="number" min="0.00000001" step="0.00000001" required/></label>
-          <label>{text.pricePerShare}<input name="price_per_share" inputMode="decimal" pattern="\d+(\.\d{1,4})?" required/></label>
-          <label>{text.totalAmount}<input name="total_amount" inputMode="decimal" pattern="\d+(\.\d{1,2})?" required/></label>
+          <label>{text.pricePerShare}<input name="price_per_share" inputMode="decimal" pattern="[0-9]+([.,][0-9]{1,4})?" required/></label>
+          <label>{text.totalAmount}<input name="total_amount" inputMode="decimal" pattern="[0-9]+([.,][0-9]{1,2})?" required/></label>
           <div className="reported-constants"><span>{text.currency}: <strong>USD</strong></span><span>{text.fxRate}: <strong>1</strong></span></div>
           <button className="primary" type="submit">{text.reportTrade}<span aria-hidden="true">→</span></button>
         </form>

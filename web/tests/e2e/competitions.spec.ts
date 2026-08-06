@@ -34,20 +34,21 @@ test("an owner creates and starts a competition with immutable ES/EN confirmatio
   await orderForm.getByLabel("Cantidad (hasta 8 decimales)").fill("2");
   await page.getByRole("button", {name: /Enviar orden/}).click();
   await expect(page.getByText("Orden enviada.")).toBeVisible();
-  await expect(page.getByText("2799.01 USD")).toBeVisible();
+  await expect(page.getByText("2798.85 USD")).toBeVisible();
   await expect(page.getByText("Ejecutada", {exact: true})).toBeVisible();
   await expect(page.getByText("Ejecutada por fixture de mercado")).toBeVisible();
 
   const reportedForm = page.getByRole("heading", {name: "Registrar operación ya realizada"}).locator("..");
-  await reportedForm.getByLabel("Fecha y hora (UTC)").fill("2026-09-03T15:00");
-  await reportedForm.getByLabel("Símbolo").fill("AAPL");
-  await reportedForm.getByLabel("Cantidad (hasta 8 decimales)").fill("0.5");
-  await reportedForm.getByLabel("Precio por acción (USD)").fill("50");
-  await reportedForm.getByLabel("Importe total (USD)").fill("25.99");
+  await reportedForm.getByLabel("Fecha y hora").fill("2026-09-03T15:00");
+  await expect(reportedForm.getByLabel("Zona horaria")).toHaveValue("Europe/Madrid");
+  await reportedForm.getByLabel("Símbolo").fill("MU");
+  await reportedForm.getByLabel("Cantidad (hasta 8 decimales)").fill("1");
+  await reportedForm.getByLabel("Precio por acción (USD)").fill("855,70");
+  await reportedForm.getByLabel("Importe total (USD)").fill("856,85");
   await reportedForm.getByRole("button", {name: /Registrar operación/}).click();
   await expect(page.getByText("Operación declarada registrada")).toBeVisible();
   await expect(page.getByText("Declarada por el usuario")).toBeVisible();
-  await expect(page.getByText("2773.02 USD")).toBeVisible();
+  await expect(page.getByText("1942.00 USD")).toBeVisible();
   await expect(page.getByRole("strong").filter({hasText: "Member E2E"})).toBeVisible();
   await expect(page.getByText("Incorporación tardía", {exact: true})).toBeVisible();
   await page.getByRole("link", {name: "EN", exact: true}).click();

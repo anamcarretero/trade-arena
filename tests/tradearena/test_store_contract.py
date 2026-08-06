@@ -78,12 +78,12 @@ def _exercise_application_contract(store):
         False, None, NOW + timedelta(days=1, seconds=1), str(uuid4()),
     )
     filled = trading.portfolio(owner.id, league.id, competition.id, quote_time)
-    assert filled.cash == "2899.01"
-    assert filled.executions[0].commission == "0.99"
+    assert filled.cash == "2898.85"
+    assert filled.executions[0].commission == "1.15"
     reported = trading.report_trade(
         member.id, league.id, competition.id, occurred_at=quote_time,
         symbol="MSFT", side="buy", quantity_value="0.12345678",
-        price_per_share="50", total_amount="7.16", currency="USD",
+        price_per_share="50", total_amount="7.32", currency="USD",
         fx_rate="1", client_trade_id=str(uuid4()), now=quote_time,
     )
     assert reported.positions[0].quantity == "0.12345678"
@@ -91,7 +91,7 @@ def _exercise_application_contract(store):
     with store.transaction() as uow:
         persisted = uow.trading.get(competition.id, member.id)
         assert persisted.portfolio.positions["MSFT"] == Decimal("0.12345678")
-        assert persisted.portfolio.executions[0].total_amount == Decimal("7.16")
+        assert persisted.portfolio.executions[0].total_amount == Decimal("7.32")
     with store.transaction() as uow:
         account = uow.trading.get(competition.id, owner.id)
         assert all(sum(posting.amount for posting in entry.postings) == 0

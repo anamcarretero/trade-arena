@@ -47,7 +47,7 @@ class CompetitionInput(BaseModel):
 class OrderInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    symbol: str = Field(min_length=1, max_length=16, pattern=r"^[A-Za-z][A-Za-z0-9.-]*$")
+    symbol: str = Field(min_length=1, max_length=16, pattern=r"^[A-Za-z][A-Za-z0-9.\-]*$")
     side: str = Field(pattern=r"^(buy|sell)$")
     quantity: Decimal = Field(gt=0, decimal_places=8)
     order_type: str = Field(pattern=r"^(market|limit)$")
@@ -63,11 +63,12 @@ class ReportedTradeInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     date: datetime
-    ticker: str = Field(min_length=1, max_length=16, pattern=r"^[A-Za-z][A-Za-z0-9.-]*$")
+    timezone: str = Field(default="Europe/Madrid", pattern=r"^(Europe/Madrid|UTC)$")
+    ticker: str = Field(min_length=1, max_length=16, pattern=r"^[A-Za-z][A-Za-z0-9.\-]*$")
     type: str = Field(pattern=r"^(buy|sell)$")
     quantity: Decimal = Field(gt=0, decimal_places=8)
-    price_per_share: str = Field(pattern=r"^\d+(?:\.\d{1,4})?$")
-    total_amount: str = Field(pattern=r"^\d+(?:\.\d{1,2})?$")
+    price_per_share: str = Field(pattern=r"^\d+(?:[.,]\d{1,4})?$")
+    total_amount: str = Field(pattern=r"^\d+(?:[.,]\d{1,2})?$")
     currency: str = Field(pattern=r"^[A-Za-z]{3}$")
     fx_rate: str = Field(pattern=r"^\d+(?:\.\d{1,8})?$")
     client_trade_id: str = Field(

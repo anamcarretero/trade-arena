@@ -526,8 +526,13 @@ export interface components {
             cumulative_return: string;
         };
         ReportedTradeInput: {
-            /** Format: date-time */
+            /** @description Fecha y hora local; si no incluye offset se interpreta con timezone. */
             date: string;
+            /**
+             * @default Europe/Madrid
+             * @enum {string}
+             */
+            timezone: "Europe/Madrid" | "UTC";
             ticker: string;
             /** @enum {string} */
             type: "buy" | "sell";

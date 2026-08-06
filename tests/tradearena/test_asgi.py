@@ -187,7 +187,7 @@ def test_fastapi_reports_fractional_trades_and_compensating_corrections():
     payload = {
         "date": NOW.isoformat(), "ticker": "AAPL", "type": "buy",
         "quantity": "0.5", "price_per_share": "100",
-        "total_amount": "50.99", "currency": "USD", "fx_rate": "1",
+        "total_amount": "51.15", "currency": "USD", "fx_rate": "1",
         "client_trade_id": "reported-api",
     }
     created = client.post(f"{base}/reported-trades", headers=headers, json=payload)
@@ -218,7 +218,7 @@ def test_reported_trade_contract_rejects_excess_precision_and_non_usd():
         json={
             "date": NOW.isoformat(), "ticker": "AAPL", "type": "buy",
             "quantity": "0.123456789", "price_per_share": "100",
-            "total_amount": "13.34", "currency": "EUR", "fx_rate": "1.1",
+            "total_amount": "13.50", "currency": "EUR", "fx_rate": "1.1",
             "client_trade_id": "bad",
         },
     )
@@ -229,11 +229,46 @@ def test_reported_trade_contract_rejects_excess_precision_and_non_usd():
         json={
             "date": NOW.isoformat(), "ticker": "AAPL", "type": "buy",
             "quantity": "0.5", "price_per_share": "100",
-            "total_amount": "50.99", "currency": "USD", "fx_rate": "1",
+            "total_amount": "51.15", "currency": "USD", "fx_rate": "1",
             "client_trade_id": "hidden",
         },
     )
     assert hidden.status_code == 404
+
+
+def test_reported_trade_accepts_madrid_time_and_decimal_commas_by_default():
+    client, token = build_client()
+    headers = {"Authorization": f"Bearer {token}"}
+    league_id = client.post(
+        "/api/v1/leagues", headers=headers, json={"name": "Madrid"}
+    ).json()["id"]
+    competition = client.post(
+        f"/api/v1/leagues/{league_id}/competitions", headers=headers,
+        json={
+            "name": "Horario local",
+            "starts_at": (NOW - timedelta(days=1)).isoformat(),
+            "ends_at": (NOW + timedelta(days=1)).isoformat(),
+        },
+    ).json()
+    client.post(
+        f"/api/v1/leagues/{league_id}/competitions/{competition['id']}/start",
+        headers=headers,
+    )
+    response = client.post(
+        f"/api/v1/leagues/{league_id}/competitions/{competition['id']}/reported-trades",
+        headers=headers,
+        json={
+            "date": "2026-08-05T14:00:00", "ticker": "MU", "type": "buy",
+            "quantity": "1", "price_per_share": "855,70",
+            "total_amount": "856,85", "currency": "USD", "fx_rate": "1",
+            "client_trade_id": "madrid-comma",
+        },
+    )
+    assert response.status_code == 201
+    execution = response.json()["executions"][0]
+    assert execution["price"] == "855.7000"
+    assert execution["commission"] == "1.15"
+    assert execution["executed_at"] == "2026-08-05T14:00:00+02:00"
 
 
 def test_fastapi_routes_match_canonical_openapi_operation_ids():

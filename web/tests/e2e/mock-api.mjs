@@ -98,13 +98,13 @@ createServer(async (request, response) => {
     portfolio.executions.push({
       id: `execution-${order.id}`, order_id: order.id, symbol: order.symbol,
       side: order.side, quantity: order.quantity, price: "100.0000",
-      commission: "0.99", session: "regular",
+      commission: "1.15", session: "regular",
       executed_at: "2026-09-02T14:31:00Z", source: "fixture",
       total_amount: null, currency: "USD", fx_rate: "1", correction_of: null
     });
-    portfolio.cash = "2799.01";
-    portfolio.equity = "2999.01";
-    portfolio.cumulative_return = "-0.000330000000";
+    portfolio.cash = "2798.85";
+    portfolio.equity = "2998.85";
+    portfolio.cumulative_return = "-0.000383333333";
     portfolio.positions = [{
       symbol: order.symbol, quantity: order.quantity,
       price: "100.0000", market_value: "200.00"
@@ -125,17 +125,18 @@ createServer(async (request, response) => {
     portfolio.orders.push(order);
     portfolio.executions.push({
       id: `execution-${order.id}`, order_id: order.id, symbol: order.symbol,
-      side: order.side, quantity: order.quantity, price: "50.0000",
-      commission: "0.99", session: "regular", executed_at: input.date,
+      side: order.side, quantity: order.quantity,
+      price: input.price_per_share.replace(",", "."),
+      commission: "1.15", session: "regular", executed_at: input.date,
       source: "reported", total_amount: input.total_amount,
       currency: "USD", fx_rate: "1", correction_of: null
     });
-    portfolio.cash = "2773.02";
-    portfolio.equity = "3023.02";
-    portfolio.cumulative_return = "0.007673333333";
+    portfolio.cash = "1942.00";
+    portfolio.equity = "3042.00";
+    portfolio.cumulative_return = "0.014000000000";
     portfolio.positions = [{
-      symbol: order.symbol, quantity: "2.5",
-      price: "100.0000", market_value: "250.00"
+      symbol: order.symbol, quantity: "3",
+      price: "366.6667", market_value: "1100.00"
     }];
     return json(response, 201, portfolio);
   }

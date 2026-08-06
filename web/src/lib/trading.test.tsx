@@ -12,7 +12,7 @@ import type {Portfolio, Ranking} from "./api";
 
 const portfolio = {
   id: "p1", competition_id: "c1", user_id: "u1", currency: "USD",
-  initial_cash: "3000.00", cash: "2797.01", joined_at: "2026-09-02T12:00:00Z",
+  initial_cash: "3000.00", cash: "2796.85", joined_at: "2026-09-02T12:00:00Z",
   joined_late: true, equity: "3017.01", cumulative_return: "0.005670000000",
   positions: [{symbol: "AAPL", quantity: "2", price: "110.0000", market_value: "220.00"}],
   orders: [{
@@ -22,7 +22,7 @@ const portfolio = {
   }],
   executions: [{
     id: "e1", order_id: "o1", symbol: "AAPL", side: "buy", quantity: "2",
-    price: "101.0000", commission: "0.99", session: "regular",
+    price: "101.0000", commission: "1.15", session: "regular",
     executed_at: "2026-09-02T14:31:00Z", source: "fixture",
     total_amount: null, currency: "USD", fx_rate: "1", correction_of: null
   }]
@@ -44,7 +44,7 @@ describe("trading panel", () => {
     expect(html).toContain(title);
     expect(html).toContain(late);
     expect(html).toContain(submit);
-    expect(html).toContain("2797.01 USD");
+    expect(html).toContain("2796.85 USD");
     expect(html).toContain(percent);
     expect(html).toContain(locale === "es" ? "Registrar operación ya realizada" : "Record a completed trade");
     expect(html).toContain(locale === "es" ? "Ejecutada por fixture" : "Executed by market fixture");

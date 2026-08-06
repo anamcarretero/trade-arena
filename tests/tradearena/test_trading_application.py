@@ -73,11 +73,11 @@ def test_order_execution_history_ledger_and_idempotency(context):
     filled = trading.portfolio(
         owner.id, league.id, competition.id, T0 + timedelta(minutes=3)
     )
-    assert filled.cash == "2797.01"
+    assert filled.cash == "2796.85"
     assert filled.positions[0].quantity == "2"
     assert filled.executions[0].source == "fixture"
     assert filled.executions[0].price == "101.0000"
-    assert filled.executions[0].commission == "0.99"
+    assert filled.executions[0].commission == "1.15"
 
     repeated = trading.submit_order(
         owner.id, league.id, competition.id, "AAPL", "buy", 2, "market",
@@ -109,19 +109,19 @@ def test_reported_fractional_trade_is_atomic_idempotent_and_auditable(context):
     result = trading.report_trade(
         owner.id, league.id, competition.id, occurred_at=occurred_at,
         symbol="aapl", side="buy", quantity_value="0.12345678",
-        price_per_share="100", total_amount="13.34", currency="usd",
+        price_per_share="100", total_amount="13.50", currency="usd",
         fx_rate="1.00000000", client_trade_id="reported-1",
         now=occurred_at,
     )
-    assert result.cash == "2986.66"
+    assert result.cash == "2986.50"
     assert result.positions[0].quantity == "0.12345678"
     assert result.executions[0].source == "reported"
-    assert result.executions[0].total_amount == "13.34"
+    assert result.executions[0].total_amount == "13.50"
 
     repeated = trading.report_trade(
         owner.id, league.id, competition.id, occurred_at=occurred_at,
         symbol="AAPL", side="buy", quantity_value="0.12345678",
-        price_per_share="100.0000", total_amount="13.34", currency="USD",
+        price_per_share="100.0000", total_amount="13.50", currency="USD",
         fx_rate="1", client_trade_id="reported-1", now=occurred_at,
     )
     assert len(repeated.orders) == len(repeated.executions) == 1
@@ -141,7 +141,7 @@ def test_reported_trade_validates_total_chronology_cash_position_and_usd(context
         actor_id=owner.id, league_id=league.id,
         competition_id=competition.id, occurred_at=occurred_at,
         symbol="AAPL", side="buy", quantity_value="1",
-        price_per_share="100", total_amount="100.99", currency="USD",
+        price_per_share="100", total_amount="101.15", currency="USD",
         fx_rate="1", client_trade_id="valid", now=occurred_at,
     )
     trading.report_trade(**common)
@@ -161,7 +161,7 @@ def test_reported_trade_validates_total_chronology_cash_position_and_usd(context
     with pytest.raises(Conflict, match="posición"):
         trading.report_trade(**{
             **common, "side": "sell", "quantity_value": "2",
-            "total_amount": "199.01", "client_trade_id": "short",
+            "total_amount": "198.85", "client_trade_id": "short",
             "occurred_at": T0 + timedelta(minutes=2),
             "now": T0 + timedelta(minutes=2),
         })
@@ -173,7 +173,7 @@ def test_reported_trade_correction_is_compensating_not_destructive(context):
     result = trading.report_trade(
         owner.id, league.id, competition.id, occurred_at=first_at,
         symbol="AAPL", side="buy", quantity_value="0.5",
-        price_per_share="100", total_amount="50.99", currency="USD",
+        price_per_share="100", total_amount="51.15", currency="USD",
         fx_rate="1", client_trade_id="mistake", now=first_at,
     )
     original_id = result.executions[0].id

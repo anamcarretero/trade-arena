@@ -249,6 +249,9 @@ idempotente. Python valida que la competición siga activa, el timestamp esté
 dentro del calendario de `rules_snapshot`, no sea futuro ni anterior a la
 incorporación y mantenga la cronología de la cartera. V1 exige USD/FX 1 e
 infiere una de las comisiones inmutables comprobando el total al céntimo.
+La API interpreta fechas sin offset mediante la zona elegida (`Europe/Madrid`
+por defecto o `UTC`) y normaliza coma o punto decimal en precio e importe; la
+comisión regular vigente para nuevos snapshots es `1.15 USD`.
 
 Una declaración válida crea atómicamente orden `filled`, ejecución completa
 `source=reported`, ledger balanceado y auditoría. Las ejecuciones del motor se

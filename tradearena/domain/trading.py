@@ -259,7 +259,7 @@ class TradingEngine:
     """Ejecuta con las comisiones inmutables recibidas del ``rules_snapshot``."""
 
     def __init__(
-        self, regular_commission: Decimal = Decimal("0.99"),
+        self, regular_commission: Decimal = Decimal("1.15"),
         extended_commission: Decimal = Decimal("2.99"),
     ) -> None:
         self.regular_commission = money(regular_commission)
