@@ -130,6 +130,11 @@ def test_float_money_is_rejected_to_avoid_platform_rounding():
         Portfolio("p1", 1000.0)
 
 
+def test_fractional_shares_are_rejected_by_the_domain():
+    with pytest.raises(ValueError, match="entero positivo"):
+        order(quantity=1.5)
+
+
 def test_fixture_market_adapter_is_deterministic_and_bounded():
     q1 = quote("100", minute=1)
     q2 = quote("101", minute=2)

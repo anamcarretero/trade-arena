@@ -9,8 +9,9 @@ from datetime import datetime
 
 from tradearena.application.models import (
     AuditEvent, Competition, Invitation, InvitationStatus, League, Membership,
-    Profile, User,
+    Profile, TradingAccount, User,
 )
+from tradearena.domain.ranking import RankingSnapshot
 
 
 class MemoryUsers:
@@ -225,6 +226,44 @@ class MemoryCompetitions:
         )
 
 
+class MemoryTrading:
+    def __init__(self, store: "MemoryStore") -> None:
+        self.store = store
+
+    def get(
+        self, competition_id: str, user_id: str, *, for_update: bool = False,
+    ) -> TradingAccount | None:
+        return copy.deepcopy(self.store._trading.get((competition_id, user_id)))
+
+    def add(self, account: TradingAccount) -> None:
+        key = (account.competition_id, account.user_id)
+        if key in self.store._trading:
+            raise ValueError("la cartera ya existe")
+        self.store._trading[key] = copy.deepcopy(account)
+
+    def save(self, account: TradingAccount) -> None:
+        self.store._trading[(account.competition_id, account.user_id)] = copy.deepcopy(account)
+
+    def list_for_competition(self, competition_id: str) -> list[TradingAccount]:
+        return sorted(
+            (copy.deepcopy(item) for item in self.store._trading.values()
+             if item.competition_id == competition_id),
+            key=lambda item: (item.joined_at, item.user_id),
+        )
+
+    def save_ranking(self, snapshot: RankingSnapshot) -> None:
+        key = (snapshot.competition_id, snapshot.as_of)
+        current = self.store._rankings.get(key)
+        if current and current.digest != snapshot.digest:
+            raise ValueError("snapshot de ranking no reproducible")
+        self.store._rankings[key] = copy.deepcopy(snapshot)
+
+    def latest_ranking(self, competition_id: str) -> RankingSnapshot | None:
+        items = [item for (candidate, _), item in self.store._rankings.items()
+                 if candidate == competition_id]
+        return copy.deepcopy(max(items, key=lambda item: item.as_of)) if items else None
+
+
 class MemoryAudit:
     def __init__(self, store: "MemoryStore") -> None:
         self.store = store
@@ -249,6 +288,8 @@ class MemoryStore:
         self._memberships: dict[tuple[str, str], Membership] = {}
         self._invitations: dict[str, Invitation] = {}
         self._competitions: dict[str, Competition] = {}
+        self._trading: dict[tuple[str, str], TradingAccount] = {}
+        self._rankings: dict[tuple[str, datetime], RankingSnapshot] = {}
         self._sessions: dict[str, tuple[str, datetime]] = {}
         self._audit: list[AuditEvent] = []
         self._lock = threading.RLock()
@@ -259,6 +300,7 @@ class MemoryStore:
         self.memberships = MemoryMemberships(self)
         self.invitations = MemoryInvitations(self)
         self.competitions = MemoryCompetitions(self)
+        self.trading = MemoryTrading(self)
         self.audit = MemoryAudit(self)
 
     @contextmanager
@@ -267,7 +309,7 @@ class MemoryStore:
             names = (
                 "_users", "_users_by_identity", "_users_by_email", "_profiles",
                 "_leagues", "_memberships", "_invitations", "_sessions", "_audit",
-                "_competitions",
+                "_competitions", "_trading", "_rankings",
             )
             state = copy.deepcopy({name: getattr(self, name) for name in names})
             try:

@@ -149,3 +149,55 @@ export async function startCompetition(formData: FormData) {
   revalidatePath(destination);
   redirect(`${destination}?status=competition-started`);
 }
+
+export async function submitOrder(formData: FormData) {
+  const locale = localeFrom(formData);
+  const leagueId = reference(formData, "league_id");
+  const competitionId = reference(formData, "competition_id");
+  const destination = leaguePath(locale, leagueId);
+  const symbol = String(formData.get("symbol") ?? "").trim().toUpperCase();
+  const side = String(formData.get("side") ?? "");
+  const orderType = String(formData.get("order_type") ?? "");
+  const quantity = Number(formData.get("quantity"));
+  const rawLimit = String(formData.get("limit_price") ?? "").trim();
+  if (!/^[A-Z][A-Z0-9.-]{0,15}$/.test(symbol) ||
+      !["buy", "sell"].includes(side) ||
+      !["market", "limit"].includes(orderType) ||
+      !Number.isSafeInteger(quantity) || quantity <= 0) {
+    redirect(`${destination}?error=order`);
+  }
+  const response = await apiFetch(
+    `/api/v1/leagues/${leagueId}/competitions/${competitionId}/orders`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        symbol, side, quantity, order_type: orderType,
+        allow_extended_hours: formData.get("allow_extended_hours") === "on",
+        limit_price: orderType === "limit" ? rawLimit : null,
+        client_order_id: crypto.randomUUID()
+      })
+    }
+  );
+  if (response.status === 403) signIn(locale, destination);
+  if (response.status === 404) redirect(`${destination}?error=access`);
+  if (!response.ok) redirect(`${destination}?error=order`);
+  revalidatePath(destination);
+  redirect(`${destination}?status=order-submitted`);
+}
+
+export async function cancelOrder(formData: FormData) {
+  const locale = localeFrom(formData);
+  const leagueId = reference(formData, "league_id");
+  const competitionId = reference(formData, "competition_id");
+  const orderId = reference(formData, "order_id");
+  const destination = leaguePath(locale, leagueId);
+  const response = await apiFetch(
+    `/api/v1/leagues/${leagueId}/competitions/${competitionId}/orders/${orderId}`,
+    {method: "DELETE"}
+  );
+  if (response.status === 403) signIn(locale, destination);
+  if (response.status === 404) redirect(`${destination}?error=access`);
+  if (!response.ok) redirect(`${destination}?error=order`);
+  revalidatePath(destination);
+  redirect(`${destination}?status=order-cancelled`);
+}

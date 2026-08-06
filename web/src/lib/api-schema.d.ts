@@ -198,6 +198,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/leagues/{league_id}/competitions/{competition_id}/portfolio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getOwnCompetitionPortfolio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leagues/{league_id}/competitions/{competition_id}/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["submitCompetitionOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leagues/{league_id}/competitions/{competition_id}/orders/{order_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["cancelCompetitionOrder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leagues/{league_id}/competitions/{competition_id}/ranking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCompetitionRanking"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/leagues/{league_id}/invitations": {
         parameters: {
             query?: never;
@@ -355,6 +419,85 @@ export interface components {
             status: components["schemas"]["CompetitionStatus"];
             rules_snapshot: components["schemas"]["RulesSnapshot"] | null;
             started_at: string | null;
+        };
+        OrderInput: {
+            symbol: string;
+            /** @enum {string} */
+            side: "buy" | "sell";
+            quantity: number;
+            /** @enum {string} */
+            order_type: "market" | "limit";
+            allow_extended_hours: boolean;
+            limit_price?: string | null;
+            client_order_id?: string | null;
+        };
+        Order: {
+            id: string;
+            symbol: string;
+            /** @enum {string} */
+            side: "buy" | "sell";
+            quantity: number;
+            /** @enum {string} */
+            order_type: "market" | "limit";
+            allow_extended_hours: boolean;
+            limit_price: string | null;
+            /** @enum {string} */
+            status: "pending" | "filled" | "rejected" | "cancelled";
+            rejection_reason: string | null;
+            /** Format: date-time */
+            submitted_at: string;
+        };
+        Execution: {
+            id: string;
+            order_id: string;
+            symbol: string;
+            /** @enum {string} */
+            side: "buy" | "sell";
+            quantity: number;
+            price: string;
+            commission: string;
+            /** @enum {string} */
+            session: "regular" | "extended";
+            /** Format: date-time */
+            executed_at: string;
+        };
+        Position: {
+            symbol: string;
+            quantity: number;
+            price: string | null;
+            market_value: string | null;
+        };
+        Portfolio: {
+            id: string;
+            competition_id: string;
+            user_id: string;
+            /** @enum {string} */
+            currency: "USD";
+            initial_cash: string;
+            cash: string;
+            /** Format: date-time */
+            joined_at: string;
+            joined_late: boolean;
+            positions: components["schemas"]["Position"][];
+            orders: components["schemas"]["Order"][];
+            executions: components["schemas"]["Execution"][];
+            equity: string;
+            cumulative_return: string;
+        };
+        RankingRow: {
+            rank: number;
+            user_id: string;
+            portfolio_id: string;
+            display_name: string;
+            cumulative_return: string;
+            joined_late: boolean;
+        };
+        Ranking: {
+            competition_id: string;
+            /** Format: date-time */
+            as_of: string;
+            rows: components["schemas"]["RankingRow"][];
+            digest: string;
         };
     };
     responses: {
@@ -775,6 +918,152 @@ export interface operations {
             };
             /** @description La competición ya estaba iniciada */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getOwnCompetitionPortfolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                league_id: components["parameters"]["LeagueId"];
+                competition_id: components["parameters"]["CompetitionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cartera propia, posiciones e historial financiero */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Portfolio"];
+                };
+            };
+            /** @description Liga */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    submitCompetitionOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                league_id: components["parameters"]["LeagueId"];
+                competition_id: components["parameters"]["CompetitionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderInput"];
+            };
+        };
+        responses: {
+            /** @description Orden aceptada y cartera resultante */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Portfolio"];
+                };
+            };
+            /** @description Orden inválida */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Liga */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fuera de calendario o clave idempotente en conflicto */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancelCompetitionOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                league_id: components["parameters"]["LeagueId"];
+                competition_id: components["parameters"]["CompetitionId"];
+                order_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Orden pendiente cancelada y cartera resultante */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Portfolio"];
+                };
+            };
+            /** @description Liga */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La orden ya no está pendiente */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getCompetitionRanking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                league_id: components["parameters"]["LeagueId"];
+                competition_id: components["parameters"]["CompetitionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranking porcentual reproducible de participantes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ranking"];
+                };
+            };
+            /** @description Liga o competición no accesible */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

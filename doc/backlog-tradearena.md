@@ -36,10 +36,13 @@
 4. TA-034 creación e inicio de competiciones dentro de una liga, con calendario
    y reglas v1 copiados de forma inmutable a `rules_snapshot`, capital Free de
    3.000 USD y confirmación visible ES/EN.
+5. TA-035 cartera, órdenes completas, fixtures de ejecución, historial,
+   ranking reproducible e incorporación tardía con capital íntegro.
 
 ## Siguiente — Fase 3
 
-1. TA-035 cartera, orden, historial, ranking y marca de incorporación tardía.
+1. Ampliación TA-035: cantidades de acciones enteras o fraccionadas y registro
+   manual auditable de ejecuciones simuladas, sin importar datos de brokers.
 2. TA-036 centro de notificaciones, exportación y borrado desde la PWA.
 3. TA-037 accesibilidad WCAG 2.2 AA y pruebas E2E de dos participantes.
 4. TA-038 staging reproducible: Vercel, Neon Frankfurt, Cloud Run Frankfurt,

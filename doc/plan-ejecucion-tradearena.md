@@ -9,7 +9,10 @@ persistencia PostgreSQL, migraciones e imagen OCI verificadas. TA-030 está
 terminado. TA-031 completa acceso, perfil y PWA; TA-032 añade creación de liga,
 invitaciones mediante enlace y administración de miembros; TA-033 incorpora la
 página pública de planes y TA-034 la creación e inicio de competiciones con
-`rules_snapshot` inmutable. El siguiente bloque es TA-035: cartera y ranking.
+`rules_snapshot` inmutable y TA-035 completa cartera, órdenes, ejecución con
+fixtures, historial, ranking e incorporación tardía. La siguiente entrega es
+una ampliación de TA-035 para cantidades fraccionadas y registro manual de
+ejecuciones simuladas; TA-036–TA-037 comienza después.
 
 ```text
 Next.js PWA/BFF — Vercel
@@ -33,6 +36,14 @@ Pages seguirán funcionando hasta la retirada deliberada de la Fase 7.
   FastAPI. Las reglas financieras no se duplican en TypeScript.
 - El plan Free ofrece una liga activa, dos plazas y capital virtual inicial
   fijo de 3.000 USD por competición.
+- Las cantidades de acciones son decimales positivas con hasta ocho decimales.
+  No hay ejecución parcial: una orden, aunque sea fraccionada, se ejecuta por
+  toda su cantidad o no se ejecuta.
+- El registro manual representa una ejecución simulada declarada dentro de
+  TradeArena, no la importación ni custodia de operaciones reales de un broker.
+  En v1 solo admite USD y `FX Rate = 1`; el backend conserva los campos
+  declarados para validación y auditoría, pero aplica exclusivamente las reglas
+  financieras de `rules_snapshot`.
 - El repositorio es la fuente canónica para instalar y operar TradeArena en
   cualquier entorno soportado. Cada plataforma incorpora documentación,
   configuración, infraestructura como código, migración, health checks,
@@ -142,6 +153,51 @@ tarea introduzca Stripe, suscripciones ni permisos de pago.
 **Salida:** dos participantes completan una competición con fixtures de precio
 deterministas y obtienen el mismo ranking reproducible.
 
+### Ampliación TA-035 — fracciones y ejecuciones registradas manualmente
+
+1. Sustituir cantidades enteras por cantidades decimales positivas de hasta
+   ocho decimales en dominio, aplicación, puertos, MemoryStore, PostgresStore,
+   migraciones, API/OpenAPI y cliente generado. Mantener prohibidos corto,
+   margen y ejecución parcial.
+2. Añadir un caso de uso y endpoint separado `.../reported-trades` para
+   registrar una ejecución simulada ya realizada con `Date`, `Ticker`, `Type`,
+   `Quantity`, `Price per share`, `Total Amount`, `Currency` y `FX Rate`, más
+   una clave idempotente. No modelarla como una orden pendiente enviada al
+   mercado.
+3. Validar en backend que la liga, competición y cartera pertenecen a la
+   sesión; que la competición está activa; que la fecha no es futura, está
+   dentro del calendario inmutable y no precede a la incorporación del
+   participante; y que los registros se introducen cronológicamente respecto
+   al último evento de la cartera.
+4. En v1 exigir `Currency = USD` y `FX Rate = 1`. Normalizar importes con
+   `Decimal` y comprobar que `Total Amount` coincide al céntimo con cantidad por
+   precio y una de las comisiones del snapshot: suma para compra y resta para
+   venta. Rechazar sin mutaciones si falta saldo, posición o coherencia.
+5. Crear atómicamente una orden ya ejecutada, una ejecución completa con
+   `source=reported`, apuntes balanceados de ledger y auditoría. Una repetición
+   con la misma clave por cartera devuelve el mismo resultado sin duplicar
+   orden, ejecución, ledger, snapshot ni ranking.
+6. No permitir edición o borrado destructivo de una ejecución financiera. Una
+   corrección posterior usa un evento compensatorio explícito y auditable.
+7. Añadir a la PWA un formulario responsive ES/EN y distinguir en cartera e
+   historial las ejecuciones `fixture` y `reported`. TypeScript solo recoge y
+   presenta datos; saldo, posición, comisión, redondeo y rentabilidad continúan
+   en Python.
+8. Añadir pruebas de dominio y aplicación, contrato MemoryStore/PostgresStore,
+   migración desde `005_trading_ranking`, autorización `404`, precisión de
+   fracciones, redondeos, orden temporal, saldo/posición, ledger, idempotencia,
+   historial y ranking. Cubrir mediante E2E dos participantes combinando una
+   orden con fixture y una ejecución registrada manualmente.
+
+**Salida:** dos participantes pueden operar con acciones enteras o
+fraccionadas y combinar órdenes normales con ejecuciones simuladas registradas
+manualmente, obteniendo la misma cartera y ranking al reproducir las mismas
+entradas, con el origen de cada ejecución claramente visible.
+
+Quedan fuera la importación CSV, sincronización con brokers, operaciones reales
+multidivisa, edición destructiva, mercado licenciado, jobs y conciliación
+bancaria.
+
 ### Fase 3.5 — TA-036–TA-037: cierre funcional y accesibilidad de la PWA
 
 1. Incorporar el centro de notificaciones y los flujos de exportación y
@@ -205,6 +261,11 @@ ejecuciones, apuntes o snapshots.
 ## 4. Verificación y aceptación
 
 - Pruebas unitarias deterministas de dinero, órdenes, ledger, eventos y ranking.
+- Pruebas de cantidades fraccionadas hasta ocho decimales, redondeo monetario y
+  ejecución completa sin rellenos parciales.
+- Pruebas de ejecuciones registradas manualmente: fecha y orden cronológico,
+  USD/FX, coherencia del total, saldo/posición, origen, compensación e
+  idempotencia por cartera.
 - Mismas pruebas de contrato para memoria y PostgreSQL.
 - Integración con PostgreSQL real, concurrencia de límites Free y rollback.
 - Validación de OpenAPI y del cliente TypeScript generado.
@@ -244,22 +305,25 @@ Secuencia recomendada:
 3. PWA de acceso, perfil y ligas;
 4. TA-033, página pública de planes;
 5. TA-034–TA-035, competiciones, cartera y ranking;
-6. TA-036–TA-037, cierre funcional y accesibilidad de la PWA;
-7. TA-038, infraestructura y staging;
-8. mercado y jobs;
-9. Stripe y preparación de beta.
+6. ampliación TA-035, fracciones y ejecuciones registradas manualmente;
+7. TA-036–TA-037, cierre funcional y accesibilidad de la PWA;
+8. TA-038, infraestructura y staging;
+9. mercado y jobs;
+10. Stripe y preparación de beta.
 
 Cada `/goal` debe expresar resultado, límites y verificación, y referenciar
 este documento en vez de copiar toda la especificación. TA-032 conserva los
 artefactos de instalación, el BFF y el sistema visual de TA-031. El siguiente
-objetivo es TA-035; TA-034 no activa cartera, órdenes, ranking, incorporación
-tardía, Friends, Club ni facturación.
+objetivo es la ampliación TA-035 de cantidades fraccionadas y ejecuciones
+registradas manualmente. No activa notificaciones, exportación, borrado desde
+la PWA, importación de brokers, Friends, Club ni facturación.
 
 ```text
-/goal Implementa TA-035 conforme a doc/plan-ejecucion-tradearena.md: cartera,
-órdenes, ejecuciones, historial, ranking y marca de incorporación tardía sobre
-las competiciones y `rules_snapshot` inmutable de TA-034. Conserva autorización
-en backend, BFF y capital Free fijo, sin notificaciones, borrado ni facturación.
+/goal Amplía TA-035 conforme a doc/plan-ejecucion-tradearena.md: cantidades de
+acciones enteras o fraccionadas y registro manual de ejecuciones simuladas con
+ledger, idempotencia, historial y ranking reproducibles. Conserva reglas en
+Python, autorización 404, sesiones HttpOnly y USD/FX 1, sin importar datos de
+brokers, notificaciones, borrado, facturación ni Stripe.
 ```
 
 ## 6. Supuestos y puertas

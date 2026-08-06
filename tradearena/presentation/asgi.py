@@ -43,6 +43,21 @@ class CompetitionInput(BaseModel):
     ends_at: datetime
 
 
+class OrderInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    symbol: str = Field(min_length=1, max_length=16, pattern=r"^[A-Za-z][A-Za-z0-9.-]*$")
+    side: str = Field(pattern=r"^(buy|sell)$")
+    quantity: int = Field(gt=0)
+    order_type: str = Field(pattern=r"^(market|limit)$")
+    allow_extended_hours: bool = False
+    limit_price: str | None = None
+    client_order_id: str | None = Field(
+        default=None, min_length=1, max_length=64,
+        pattern=r"^[A-Za-z0-9-]+$",
+    )
+
+
 class AuthSessionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -188,6 +203,62 @@ def create_app(api: Api, readiness: Callable[[], bool] | None = None) -> FastAPI
         return _response(api.handle(
             "POST",
             f"/api/v1/leagues/{league_id}/competitions/{competition_id}/start",
+            token,
+        ))
+
+    @app.get(
+        "/api/v1/leagues/{league_id}/competitions/{competition_id}/portfolio",
+        operation_id="getOwnCompetitionPortfolio",
+    )
+    def get_own_competition_portfolio(
+        league_id: str, competition_id: str,
+        token: str | None = Depends(_token),
+    ):
+        return _response(api.handle(
+            "GET",
+            f"/api/v1/leagues/{league_id}/competitions/{competition_id}/portfolio",
+            token,
+        ))
+
+    @app.post(
+        "/api/v1/leagues/{league_id}/competitions/{competition_id}/orders",
+        operation_id="submitCompetitionOrder",
+    )
+    def submit_competition_order(
+        league_id: str, competition_id: str, data: OrderInput,
+        token: str | None = Depends(_token),
+    ):
+        return _response(api.handle(
+            "POST",
+            f"/api/v1/leagues/{league_id}/competitions/{competition_id}/orders",
+            token, data.model_dump(mode="json"),
+        ))
+
+    @app.delete(
+        "/api/v1/leagues/{league_id}/competitions/{competition_id}/orders/{order_id}",
+        operation_id="cancelCompetitionOrder",
+    )
+    def cancel_competition_order(
+        league_id: str, competition_id: str, order_id: str,
+        token: str | None = Depends(_token),
+    ):
+        return _response(api.handle(
+            "DELETE",
+            f"/api/v1/leagues/{league_id}/competitions/{competition_id}/orders/{order_id}",
+            token,
+        ))
+
+    @app.get(
+        "/api/v1/leagues/{league_id}/competitions/{competition_id}/ranking",
+        operation_id="getCompetitionRanking",
+    )
+    def get_competition_ranking(
+        league_id: str, competition_id: str,
+        token: str | None = Depends(_token),
+    ):
+        return _response(api.handle(
+            "GET",
+            f"/api/v1/leagues/{league_id}/competitions/{competition_id}/ranking",
             token,
         ))
 

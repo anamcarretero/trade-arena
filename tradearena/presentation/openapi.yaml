@@ -191,6 +191,70 @@ paths:
               schema: {$ref: "#/components/schemas/Competition"}
         "404": {description: Liga o competición no accesible}
         "409": {description: La competición ya estaba iniciada}
+  /api/v1/leagues/{league_id}/competitions/{competition_id}/portfolio:
+    get:
+      operationId: getOwnCompetitionPortfolio
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+        - {$ref: "#/components/parameters/CompetitionId"}
+      responses:
+        "200":
+          description: Cartera propia, posiciones e historial financiero
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Portfolio"}
+        "404": {description: Liga, competición o cartera no accesible}
+  /api/v1/leagues/{league_id}/competitions/{competition_id}/orders:
+    post:
+      operationId: submitCompetitionOrder
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+        - {$ref: "#/components/parameters/CompetitionId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/OrderInput"}
+      responses:
+        "201":
+          description: Orden aceptada y cartera resultante
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Portfolio"}
+        "400": {description: Orden inválida}
+        "404": {description: Liga, competición o cartera no accesible}
+        "409": {description: Fuera de calendario o clave idempotente en conflicto}
+  /api/v1/leagues/{league_id}/competitions/{competition_id}/orders/{order_id}:
+    delete:
+      operationId: cancelCompetitionOrder
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+        - {$ref: "#/components/parameters/CompetitionId"}
+        - name: order_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Orden pendiente cancelada y cartera resultante
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Portfolio"}
+        "404": {description: Liga, competición, cartera u orden no accesible}
+        "409": {description: La orden ya no está pendiente}
+  /api/v1/leagues/{league_id}/competitions/{competition_id}/ranking:
+    get:
+      operationId: getCompetitionRanking
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+        - {$ref: "#/components/parameters/CompetitionId"}
+      responses:
+        "200":
+          description: Ranking porcentual reproducible de participantes
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Ranking"}
+        "404": {description: Liga o competición no accesible}
   /api/v1/leagues/{league_id}/invitations:
     post:
       operationId: inviteLeagueMember
@@ -358,6 +422,90 @@ components:
           oneOf:
             - {type: string, format: date-time}
             - {type: "null"}
+    OrderInput:
+      type: object
+      additionalProperties: false
+      required: [symbol, side, quantity, order_type, allow_extended_hours]
+      properties:
+        symbol: {type: string, pattern: '^[A-Za-z][A-Za-z0-9.-]*$', maxLength: 16}
+        side: {type: string, enum: [buy, sell]}
+        quantity: {type: integer, minimum: 1}
+        order_type: {type: string, enum: [market, limit]}
+        allow_extended_hours: {type: boolean}
+        limit_price:
+          oneOf: [{type: string, pattern: '^\d+(\.\d{1,4})?$'}, {type: "null"}]
+        client_order_id:
+          oneOf: [{type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9-]+$'}, {type: "null"}]
+    Order:
+      type: object
+      required: [id, symbol, side, quantity, order_type, allow_extended_hours, limit_price, status, rejection_reason, submitted_at]
+      properties:
+        id: {type: string}
+        symbol: {type: string}
+        side: {type: string, enum: [buy, sell]}
+        quantity: {type: integer, minimum: 1}
+        order_type: {type: string, enum: [market, limit]}
+        allow_extended_hours: {type: boolean}
+        limit_price: {oneOf: [{type: string}, {type: "null"}]}
+        status: {type: string, enum: [pending, filled, rejected, cancelled]}
+        rejection_reason: {oneOf: [{type: string}, {type: "null"}]}
+        submitted_at: {type: string, format: date-time}
+    Execution:
+      type: object
+      required: [id, order_id, symbol, side, quantity, price, commission, session, executed_at]
+      properties:
+        id: {type: string}
+        order_id: {type: string}
+        symbol: {type: string}
+        side: {type: string, enum: [buy, sell]}
+        quantity: {type: integer, minimum: 1}
+        price: {type: string}
+        commission: {type: string}
+        session: {type: string, enum: [regular, extended]}
+        executed_at: {type: string, format: date-time}
+    Position:
+      type: object
+      required: [symbol, quantity, price, market_value]
+      properties:
+        symbol: {type: string}
+        quantity: {type: integer, minimum: 1}
+        price: {oneOf: [{type: string}, {type: "null"}]}
+        market_value: {oneOf: [{type: string}, {type: "null"}]}
+    Portfolio:
+      type: object
+      required: [id, competition_id, user_id, currency, initial_cash, cash, joined_at, joined_late, positions, orders, executions, equity, cumulative_return]
+      properties:
+        id: {type: string}
+        competition_id: {type: string}
+        user_id: {type: string}
+        currency: {type: string, enum: [USD]}
+        initial_cash: {type: string}
+        cash: {type: string}
+        joined_at: {type: string, format: date-time}
+        joined_late: {type: boolean}
+        positions: {type: array, items: {$ref: "#/components/schemas/Position"}}
+        orders: {type: array, items: {$ref: "#/components/schemas/Order"}}
+        executions: {type: array, items: {$ref: "#/components/schemas/Execution"}}
+        equity: {type: string}
+        cumulative_return: {type: string}
+    RankingRow:
+      type: object
+      required: [rank, user_id, portfolio_id, display_name, cumulative_return, joined_late]
+      properties:
+        rank: {type: integer, minimum: 1}
+        user_id: {type: string}
+        portfolio_id: {type: string}
+        display_name: {type: string}
+        cumulative_return: {type: string}
+        joined_late: {type: boolean}
+    Ranking:
+      type: object
+      required: [competition_id, as_of, rows, digest]
+      properties:
+        competition_id: {type: string}
+        as_of: {type: string, format: date-time}
+        rows: {type: array, items: {$ref: "#/components/schemas/RankingRow"}}
+        digest: {type: string, pattern: '^[0-9a-f]{64}$'}
   securitySchemes:
     bearerSession:
       type: http

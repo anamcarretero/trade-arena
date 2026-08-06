@@ -129,6 +129,13 @@ historial existente.
 añade tanto una restricción de ciclo de vida como un trigger que impide cambiar
 el snapshot una vez materializado.
 
+`migrations/005_trading_ranking.sql` activa el modelo financiero reservado en
+la migración inicial: distingue participantes tardíos, persiste posiciones,
+conserva el motivo de rechazo de cada orden y admite identificadores
+idempotentes opacos. `MemoryStore` y `PostgresStore` reconstruyen el mismo
+agregado Python de cartera —órdenes, ejecuciones y ledger incluidos— y pasan el
+mismo contrato de aplicación.
+
 Al crear una liga Free se bloquea la fila del propietario antes de comprobar
 su límite, y el índice parcial mantiene una segunda defensa. Al invitar o
 aceptar se bloquea la liga antes de contar miembros e invitaciones pendientes,
@@ -206,6 +213,34 @@ de liga con el formulario de calendario, inicio y una confirmación ES/EN que
 muestra claramente que reglas y calendario quedaron fijados. Las Server
 Actions siguen transmitiendo solo referencias y formulario; la sesión opaca
 permanece cifrada en la cookie `HttpOnly` del BFF.
+
+TA-035 materializa como participantes a todos los miembros activos al iniciar
+y crea para cada uno una cartera con el capital de `rules_snapshot`; en Free
+son exactamente `3000.00 USD`. Aceptar una invitación después del inicio crea
+la cartera en la misma transacción con el capital íntegro y `joined_late=true`.
+La expulsión corta el acceso, pero conserva el historial financiero.
+
+`TradingService` es la única frontera de decisiones de cartera. Lee calendario,
+capital y comisiones exclusivamente del snapshot inmutable, entrega el agregado
+al motor Python y persiste el resultado. Acepta acciones enteras, compra/venta,
+mercado/límite y sesión regular o ampliada; nunca ejecuta una cotización anterior
+a la orden, no divide ejecuciones y rechaza sin comisión la falta de efectivo o
+posición. Las órdenes permanecen GTC hasta ejecución, cancelación, fin del
+calendario fijado o suspensión definitiva indicada por el puerto de mercado.
+
+Durante TA-035 `FixtureMarketDataAdapter` proporciona precios deterministas en
+desarrollo y pruebas; producción se compone con un adaptador vacío hasta la
+integración licenciada y los jobs de Fase 4. No se consulta Yahoo ni se acepta
+un precio enviado por el navegador. La valoración genera snapshots de cartera
+y ranking porcentual con hash estable, desempate por usuario y marca visible de
+incorporación tardía.
+
+La API añade `.../portfolio`, `.../orders`, cancelación por id y `.../ranking`.
+Todos vuelven a comprobar liga, competición, cartera y orden; un recurso ajeno
+responde `404`. El BFF conserva la sesión cifrada `HttpOnly`, y las Server
+Actions solo envían referencias y campos de orden. La PWA responsive ES/EN
+muestra cifras calculadas por Python; TypeScript no contiene reglas de
+comisiones, saldo, valoración ni rentabilidad.
 
 ### Portabilidad operativa
 

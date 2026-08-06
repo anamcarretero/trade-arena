@@ -14,7 +14,7 @@ añaden participante autenticado, propietario y administrador de liga. Sus
 recursos son privados y solo se exponen por `/api/v1` tras validar sesión y
 membresía activa.
 
-## 0. Flujos del producto nuevo hasta TA-034
+## 0. Flujos del producto nuevo hasta TA-035
 
 1. Identidad verifica un enlace de email de un solo uso o claims Google con
    emisor, audiencia y email verificado; después se emite una sesión propia.
@@ -118,6 +118,35 @@ BFF no cambia el `404` de ligas ajenas.
 TA-034 no crea participantes, carteras, órdenes, ejecuciones, historial ni
 ranking y tampoco incorpora participantes tardíos. Esos flujos empiezan en
 TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
+
+### Cartera, órdenes e incorporación tardía de TA-035
+
+1. Al iniciar una competición, el backend incorpora a cada miembro activo y
+   crea su cartera. El importe se lee de `rules_snapshot`; Free concede
+   exactamente `3000.00 USD`.
+2. Si una persona acepta la invitación después del inicio, membresía,
+   participación y cartera se crean en la misma transacción. Recibe los
+   `3000.00 USD` completos y aparece con «Incorporación tardía»/«Late entry».
+3. La PWA envía una compra o venta de acciones enteras, de mercado o límite,
+   para sesión regular o regular más ampliada. La Server Action transmite los
+   campos y una clave idempotente; FastAPI vuelve a validar sesión,
+   pertenencia, calendario y reglas.
+4. El backend consulta únicamente fixtures del puerto de mercado en esta fase.
+   Ordena cotizaciones e ignora cualquiera anterior a la orden. Una ejecución
+   siempre cubre toda la cantidad y carga `0.99 USD` en regular o `2.99 USD` en
+   ampliada, según el snapshot.
+5. Si falta efectivo o posición, la orden se rechaza sin ejecución ni comisión.
+   No existe fracción, corto, margen ni ejecución parcial. Una orden pendiente
+   es GTC hasta ejecución, cancelación, fin o suspensión definitiva.
+6. La cartera devuelve efectivo, posiciones, valoración, retorno, órdenes y
+   ejecuciones. El ranking reproduce las carteras con los mismos fixtures,
+   desempata de forma estable, persiste su hash y marca incorporaciones tardías.
+7. Una liga, competición, cartera u orden ajena responde `404`. Expulsar corta
+   el acceso, pero conserva participación, órdenes, ejecuciones y ledger. El
+   navegador no recibe sesión interna, tokens, secretos ni credenciales.
+
+TA-035 no incorpora notificaciones, exportación o borrado desde la PWA,
+facturación, Stripe, mercado licenciado, jobs programados ni staging.
 
 Para ejecutar el backend contra PostgreSQL se aplican primero las migraciones
 con `DATABASE_URL=... python3 -m tradearena migrate` y se arranca después la API
