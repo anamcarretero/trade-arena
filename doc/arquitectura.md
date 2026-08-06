@@ -175,6 +175,11 @@ vuelve a autenticar, autorizar y aplicar los límites dentro de la transacción.
 El único componente cliente nuevo copia el enlace de invitación y no recibe la
 sesión opaca ni ninguna credencial interna.
 
+TA-033 añadirá `/{locale}/pricing` como página pública responsive dentro de la
+misma PWA. Mostrará Free con sus límites vigentes y Friends/Club como
+«Próximamente», sin precios ficticios, Checkout ni concesión de derechos. La
+facturación y la activación de esos planes continúan reservadas para la Fase 5.
+
 ### Portabilidad operativa
 
 `Dockerfile` es el artefacto OCI común de API/migración y `Dockerfile.web` el

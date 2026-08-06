@@ -8,7 +8,7 @@ dominio reproducible, casos de uso de cuentas y ligas, API FastAPI,
 persistencia PostgreSQL, migraciones e imagen OCI verificadas. TA-030 está
 terminado. TA-031 completa acceso, perfil y PWA; TA-032 añade creación de liga,
 invitaciones mediante enlace y administración de miembros. El siguiente bloque
-es TA-033: competiciones.
+es TA-033: página pública de planes. Las competiciones pasan a TA-034.
 
 ```text
 Next.js PWA/BFF — Vercel
@@ -112,7 +112,23 @@ La instalación genérica resultante se conserva en `Dockerfile`, `compose.yaml`
 **Salida:** dos cuentas pueden crear y gestionar una liga privada desde la PWA
 sin exponer secretos ni confiar autorización al cliente.
 
-### Fase 3.3 — Competiciones, cartera y ranking
+### Fase 3.3 — TA-033: página pública de planes
+
+1. Añadir a la PWA una ruta pública responsive ES/EN para consultar los planes,
+   accesible desde la navegación pública sin iniciar sesión.
+2. Presentar Free con sus límites vigentes y una llamada a la acción que lleve
+   al acceso o a la aplicación según el estado de sesión.
+3. Mostrar Friends y Club como planes futuros con la indicación visible
+   «Próximamente»/«Coming soon», sin precios inventados, compra ni activación de
+   derechos.
+4. Mantener el sistema visual de TradeArena, accesibilidad base y pruebas de
+   navegación, contenido bilingüe y responsive móvil sin scroll horizontal.
+
+**Salida:** cualquier visitante puede comparar el plan Free con Friends y Club,
+entender cuáles están disponibles y cuáles llegarán más adelante, sin que esta
+tarea introduzca Stripe, suscripciones ni permisos de pago.
+
+### Fase 3.4 — TA-034–TA-035: competiciones, cartera y ranking
 
 1. Extender migraciones, servicios y OpenAPI para competiciones,
    `rules_snapshot`, participantes tardíos, carteras, órdenes, ejecuciones,
@@ -125,7 +141,17 @@ sin exponer secretos ni confiar autorización al cliente.
 **Salida:** dos participantes completan una competición con fixtures de precio
 deterministas y obtienen el mismo ranking reproducible.
 
-### Fase 3.4 — Infraestructura y entrega continua
+### Fase 3.5 — TA-036–TA-037: cierre funcional y accesibilidad de la PWA
+
+1. Incorporar el centro de notificaciones y los flujos de exportación y
+   borrado de cuenta ya soportados por la aplicación.
+2. Completar accesibilidad WCAG 2.2 AA y E2E de dos participantes sobre los
+   recorridos críticos.
+
+**Salida:** la PWA cubre los flujos previstos para beta y supera la validación
+de accesibilidad y los recorridos E2E antes del despliegue integrado.
+
+### Fase 3.6 — TA-038: infraestructura y entrega continua
 
 1. Definir como código Artifact Registry, Cloud Run, Scheduler, IAM, Secret
    Manager, Neon y la configuración necesaria de Vercel.
@@ -215,20 +241,23 @@ Secuencia recomendada:
 1. consolidación y entorno reproducible;
 2. TA-030, PostgreSQL y FastAPI;
 3. PWA de acceso, perfil y ligas;
-4. competiciones, cartera y ranking;
-5. infraestructura y staging;
-6. mercado y jobs;
-7. Stripe y preparación de beta.
+4. TA-033, página pública de planes;
+5. TA-034–TA-035, competiciones, cartera y ranking;
+6. TA-036–TA-037, cierre funcional y accesibilidad de la PWA;
+7. TA-038, infraestructura y staging;
+8. mercado y jobs;
+9. Stripe y preparación de beta.
 
 Cada `/goal` debe expresar resultado, límites y verificación, y referenciar
 este documento en vez de copiar toda la especificación. TA-032 conserva los
 artefactos de instalación, el BFF y el sistema visual de TA-031. El siguiente
-objetivo es TA-033.
+objetivo es TA-033; no activa todavía Friends, Club ni facturación.
 
 ```text
-/goal Implementa TA-033 conforme a doc/plan-ejecucion-tradearena.md: creación y
-comienzo de competición con rules_snapshot visible e inmutable. Conserva el
-BFF, la autorización 404 entre ligas y el alcance separado de cartera/ranking.
+/goal Implementa TA-033 conforme a doc/plan-ejecucion-tradearena.md: página
+pública responsive ES/EN de planes con Free disponible y Friends/Club marcados
+como Próximamente. Conserva el BFF y el sistema visual, sin Stripe ni derechos
+de pago.
 ```
 
 ## 6. Supuestos y puertas

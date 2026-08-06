@@ -14,9 +14,9 @@ Actualmente se soportan dos formas reproducibles:
 | Entorno | Artefactos canónicos | Estado |
 |---|---|---|
 | Local o servidor con Docker | `Dockerfile`, `Dockerfile.web`, `compose.yaml`, `.env.example`, `scripts/install-compose.sh` y `scripts/verify-deployment.sh` | API, PostgreSQL y PWA/BFF ejecutables |
-| Plataforma de contenedores OCI con PostgreSQL administrado | misma imagen, comandos `serve`/`migrate` y esta guía | portable; la infraestructura específica llega en TA-037 |
+| Plataforma de contenedores OCI con PostgreSQL administrado | misma imagen, comandos `serve`/`migrate` y esta guía | portable; la infraestructura específica llega en TA-038 |
 
-La plataforma objetivo sigue siendo Cloud Run y Neon. Hasta que TA-037 añada
+La plataforma objetivo sigue siendo Cloud Run y Neon. Hasta que TA-038 añada
 su infraestructura como código no se considera un despliegue de producción
 reproducible, aunque la imagen sea compatible.
 

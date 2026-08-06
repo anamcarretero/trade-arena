@@ -80,6 +80,17 @@ BFF no cambia el `404` de ligas ajenas.
    termina la sesión de Auth0. Cambiar `/es` por `/en` adapta la interfaz; al
    guardar perfil, la preferencia queda persistida en la cuenta.
 
+### Pricing público previsto en TA-033
+
+1. Cualquier visitante puede abrir `/{locale}/pricing` y acceder desde la
+   navegación pública sin iniciar sesión.
+2. La página presenta Free con los límites realmente disponibles y permite
+   continuar al acceso o a la aplicación si ya existe una sesión.
+3. Friends y Club se muestran para anticipar la evolución del producto, pero
+   con «Próximamente»/«Coming soon» y sin una acción de compra habilitada.
+4. TA-033 no crea suscripciones, cobros ni derechos nuevos; esas capacidades
+   siguen perteneciendo a la Fase 5.
+
 Para ejecutar el backend contra PostgreSQL se aplican primero las migraciones
 con `DATABASE_URL=... python3 -m tradearena migrate` y se arranca después la API
 con `python3 -m tradearena serve`. Liveness solo
