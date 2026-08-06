@@ -2,6 +2,8 @@
 .github
 .pytest_cache
 .venv
+web/node_modules
+web/.next
 __pycache__
 data
 doc

@@ -31,11 +31,30 @@ membresía activa.
    pertenencia. Una cuenta externa recibe `404`, también al intentar mutaciones,
    para evitar enumerar ligas privadas.
 
-La PWA todavía no forma parte de estas fases. El contrato HTTP está en
-`tradearena/presentation/openapi.yaml`; TA-030 lo sirve mediante FastAPI,
-incluye sondas `/health/live` y `/health/ready`, y comprueba automáticamente
-que rutas y `operationId` coincidan. Las pruebas de abuso directo siguen en
-`tests/tradearena/test_authorization.py`.
+TA-031 incorpora la PWA para acceso, perfil e idioma. El contrato HTTP está en
+`tradearena/presentation/openapi.yaml`; FastAPI incluye sondas `/health/live`
+y `/health/ready`, intercambio Auth0 exclusivo del BFF y comprobación
+automática de rutas/`operationId`. Las pruebas de abuso directo siguen en
+`tests/tradearena/test_authorization.py` y verifican que la incorporación del
+BFF no cambia el `404` de ligas ajenas.
+
+### Acceso Auth0, perfil e idioma en la PWA
+
+1. La persona elige ES o EN y pulsa acceso. El BFF genera `state`, `nonce` y
+   PKCE; solo guarda la transacción cifrada en una cookie `HttpOnly` temporal.
+2. Auth0 Universal Login ofrece email y Google. El callback se ejecuta en
+   servidor, comprueba `state` e intercambia el código sin exponer tokens.
+3. FastAPI recibe la aserción mediante el canal autenticado BFF↔API, valida
+   criptografía, emisor, audiencia, nonce y email verificado, enlaza o crea la
+   cuenta y emite una sesión propia opaca.
+4. El BFF cifra esa sesión en cookie `HttpOnly`; el navegador solo conoce el
+   estado visual. Las llamadas a `/api/v1/me` y perfil salen desde Next.js.
+5. Una cuenta sin perfil completa nombre, fecha de nacimiento, consentimiento
+   e idioma. FastAPI vuelve a imponer idioma permitido, nombre y edad mínima de
+   18 años, aunque se manipule el formulario.
+6. Al cerrar sesión, el BFF revoca el registro servidor, borra la cookie y
+   termina la sesión de Auth0. Cambiar `/es` por `/en` adapta la interfaz; al
+   guardar perfil, la preferencia queda persistida en la cuenta.
 
 Para ejecutar el backend contra PostgreSQL se aplican primero las migraciones
 con `DATABASE_URL=... python3 -m tradearena migrate` y se arranca después la API
@@ -74,10 +93,10 @@ lo eliminan al terminar.
    espera a PostgreSQL 16.
 3. El servicio finito `migrate` aplica las migraciones pendientes. Si falla, la
    API nueva no arranca.
-4. La API se ejecuta sin privilegios, PostgreSQL permanece en una red privada y
-   el volumen conserva los datos entre reinicios.
-5. `scripts/verify-deployment.sh` exige respuestas correctas de liveness,
-   readiness y OpenAPI antes de considerar terminada la instalación.
+4. API y PWA/BFF se ejecutan sin privilegios, PostgreSQL permanece en una red
+   privada y el volumen conserva los datos entre reinicios.
+5. `scripts/verify-deployment.sh` exige liveness, readiness, OpenAPI, salud web,
+   ambas portadas de idioma y manifest antes de considerar terminada la instalación.
 6. En otro servidor o proveedor se usa la misma imagen y la secuencia
    migrar→servir→verificar. Sus diferencias, secretos, IaC, backup,
    restauración y rollback deben añadirse al repositorio antes de declararlo

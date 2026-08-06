@@ -5,7 +5,9 @@ import yaml
 from fastapi.testclient import TestClient
 
 from tradearena.adapters.memory import MemoryStore
-from tradearena.application.services import AccountService, LeagueService, SessionService
+from tradearena.application.services import (
+    AccountService, AuthService, LeagueService, SessionService,
+)
 from tradearena.ports.identity import IdentityAssertion
 from tradearena.presentation.api import Api
 from tradearena.presentation.asgi import create_app
@@ -36,6 +38,13 @@ def build_client(readiness=lambda: True):
     token = sessions.issue(owner.id, NOW)
     dispatcher = Api(sessions, accounts, leagues, lambda: NOW)
     return TestClient(create_app(dispatcher, readiness)), token
+
+
+class TrustedAuth0:
+    def verify_id_token(self, token, nonce):
+        assert token == "valid-id-token"
+        assert nonce == "valid-auth0-nonce"
+        return IdentityAssertion("auth0", "auth0|new", "new@example.com", True)
 
 
 def test_health_checks_distinguish_liveness_and_readiness():
@@ -93,3 +102,35 @@ def test_fastapi_routes_match_canonical_openapi_operation_ids():
         }
 
     assert operations(generated) == operations(canonical)
+
+
+def test_auth0_exchange_is_bff_only_and_logout_revokes_server_session():
+    store = MemoryStore()
+    ids = Ids()
+    accounts = AccountService(store, ids)
+    sessions = SessionService(store, lambda: "opaque-session", lambda: NOW)
+    dispatcher = Api(
+        sessions, accounts, LeagueService(store, ids), lambda: NOW,
+        AuthService(TrustedAuth0(), accounts, sessions), "shared-bff-secret",
+    )
+    client = TestClient(create_app(dispatcher))
+
+    body = {"id_token": "valid-id-token", "nonce": "valid-auth0-nonce"}
+    denied = client.post("/api/v1/auth/session", json=body)
+    assert denied.status_code == 403
+    exchanged = client.post(
+        "/api/v1/auth/session",
+        headers={"X-TradeArena-BFF": "shared-bff-secret"},
+        json=body,
+    )
+    assert exchanged.status_code == 201
+    assert exchanged.json()["session_token"] == "opaque-session"
+    assert client.get(
+        "/api/v1/me", headers={"Authorization": "Bearer opaque-session"}
+    ).status_code == 200
+    assert client.post(
+        "/api/v1/auth/logout", headers={"Authorization": "Bearer opaque-session"}
+    ).status_code == 204
+    assert client.get(
+        "/api/v1/me", headers={"Authorization": "Bearer opaque-session"}
+    ).status_code == 403

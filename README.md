@@ -151,20 +151,23 @@ Para cada día natural se calcula:
 
 ## Empezar
 
-### TradeArena nuevo: backend local o servidor Docker
+### TradeArena nuevo: PWA, API y PostgreSQL en Docker
 
-El backend FastAPI y PostgreSQL se pueden instalar desde un clon sin instalar
-Python ni PostgreSQL en el host:
+La PWA Next.js ES/EN, el BFF Auth0, FastAPI y PostgreSQL se instalan desde un
+clon sin instalar Node, Python ni PostgreSQL en el host:
 
 ```bash
 cp .env.example .env
-# Sustituye POSTGRES_PASSWORD por: openssl rand -hex 32
+# Completa Auth0 y genera POSTGRES_PASSWORD, BFF_SHARED_SECRET y
+# SESSION_ENCRYPTION_KEY como explica doc/instalacion-despliegue.md
 ./scripts/install-compose.sh
 ```
 
-La API queda en `http://127.0.0.1:8080`, Swagger en `/docs` y los datos se
-conservan en un volumen Docker. La guía canónica de instalación, actualización,
-seguridad, backup, restauración y despliegue OCI está en
+La PWA queda en `http://localhost:3000`, la API en
+`http://127.0.0.1:8080`, Swagger en `/docs` y los datos se conservan en un
+volumen Docker. Tokens y secretos permanecen en el BFF/API y nunca llegan al
+navegador. La guía canónica de instalación, actualización, seguridad, backup,
+restauración y despliegue OCI está en
 [`doc/instalacion-despliegue.md`](doc/instalacion-despliegue.md).
 
 ### Ranking histórico

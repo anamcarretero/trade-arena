@@ -4,6 +4,9 @@ x-api-base: &api-base
   image: ${TRADEARENA_IMAGE:-tradearena:local}
   environment:
     DATABASE_URL: postgresql://${POSTGRES_USER:-tradearena}:${POSTGRES_PASSWORD:?Copia .env.example a .env y define POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tradearena}
+    AUTH0_DOMAIN: ${AUTH0_DOMAIN:?Define el dominio EU del tenant Auth0}
+    AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID:?Define el client ID de Auth0}
+    BFF_SHARED_SECRET: ${BFF_SHARED_SECRET:?Genera un secreto compartido API-BFF}
 
 services:
   postgres:
@@ -38,6 +41,26 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    image: ${TRADEARENA_WEB_IMAGE:-tradearena-web:local}
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    environment:
+      AUTH0_DOMAIN: ${AUTH0_DOMAIN:?Define el dominio EU del tenant Auth0}
+      AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID:?Define el client ID de Auth0}
+      AUTH0_CLIENT_SECRET: ${AUTH0_CLIENT_SECRET:?Define el client secret de Auth0}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      API_BASE_URL: http://api:8080
+      BFF_SHARED_SECRET: ${BFF_SHARED_SECRET:?Genera un secreto compartido API-BFF}
+      SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:?Genera una clave base64url de 32 bytes}
+    ports:
+      - "${TRADEARENA_WEB_BIND_ADDRESS:-127.0.0.1}:${TRADEARENA_WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

@@ -15,6 +15,9 @@ import secrets
 from datetime import datetime, timezone
 from typing import Mapping
 
+import jwt
+from jwt import PyJWKClient
+
 from tradearena.ports.identity import IdentityAssertion
 
 
@@ -88,3 +91,36 @@ class LocalIdentityAdapter:
 
 
 UTC = timezone.utc
+
+
+class Auth0IdentityAdapter:
+    """Valida ID tokens OIDC contra las claves públicas del tenant Auth0."""
+
+    def __init__(self, domain: str, client_id: str, jwks_client=None) -> None:
+        clean_domain = domain.removeprefix("https://").rstrip("/")
+        if not clean_domain or not client_id:
+            raise ValueError("AUTH0_DOMAIN y AUTH0_CLIENT_ID son obligatorios")
+        self.issuer = f"https://{clean_domain}/"
+        self.client_id = client_id
+        self._jwks = jwks_client or PyJWKClient(f"{self.issuer}.well-known/jwks.json")
+
+    def verify_id_token(self, token: str, nonce: str) -> IdentityAssertion:
+        try:
+            signing_key = self._jwks.get_signing_key_from_jwt(token).key
+            claims = jwt.decode(
+                token,
+                signing_key,
+                algorithms=["RS256"],
+                audience=self.client_id,
+                issuer=self.issuer,
+                options={"require": ["exp", "iat", "iss", "aud", "sub", "email"]},
+            )
+        except jwt.PyJWTError as exc:
+            raise IdentityError("ID token de Auth0 inválido") from exc
+        if not nonce or not hmac.compare_digest(str(claims.get("nonce", "")), nonce):
+            raise IdentityError("nonce de Auth0 inválido")
+        if claims.get("email_verified") not in (True, "true"):
+            raise IdentityError("el email de Auth0 debe estar verificado")
+        return IdentityAssertion(
+            "auth0", str(claims["sub"]), str(claims["email"]).lower(), True
+        )

@@ -173,6 +173,15 @@ class PostgresSessions(_Repository):
             (user_id, bytes.fromhex(token_hash), created_at, expires_at),
         )
 
+    def revoke(self, token_hash: str, revoked_at: datetime) -> None:
+        self.connection.execute(
+            """
+            UPDATE sessions SET revoked_at = %s
+             WHERE token_hash = %s AND revoked_at IS NULL
+            """,
+            (revoked_at, bytes.fromhex(token_hash)),
+        )
+
     def revoke_for_user(self, user_id: str, revoked_at: datetime) -> None:
         self.connection.execute(
             """

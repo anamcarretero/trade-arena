@@ -26,6 +26,14 @@ if [[ -z "${password}" || "${password}" == replace-* ]]; then
   exit 1
 fi
 
+for variable in AUTH0_DOMAIN AUTH0_CLIENT_ID AUTH0_CLIENT_SECRET BFF_SHARED_SECRET SESSION_ENCRYPTION_KEY; do
+  value="$(sed -n "s/^${variable}=//p" "${env_file}" | tail -n 1)"
+  if [[ -z "${value}" || "${value}" == replace-* ]]; then
+    echo "Error: define ${variable} con un valor real en .env." >&2
+    exit 1
+  fi
+done
+
 docker compose \
   --project-directory "${repository_dir}" \
   --env-file "${env_file}" \
@@ -36,7 +44,7 @@ docker compose \
   --project-directory "${repository_dir}" \
   --env-file "${env_file}" \
   --file "${repository_dir}/compose.yaml" \
-  build api
+  build api web
 
 docker compose \
   --project-directory "${repository_dir}" \
@@ -45,4 +53,6 @@ docker compose \
   up --detach --no-build
 
 port="$(sed -n 's/^TRADEARENA_PORT=//p' "${env_file}" | tail -n 1)"
-"${script_dir}/verify-deployment.sh" "http://127.0.0.1:${port:-8080}"
+web_port="$(sed -n 's/^TRADEARENA_WEB_PORT=//p' "${env_file}" | tail -n 1)"
+"${script_dir}/verify-deployment.sh" \
+  "http://127.0.0.1:${port:-8080}" "http://127.0.0.1:${web_port:-3000}"

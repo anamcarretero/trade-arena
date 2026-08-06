@@ -6,6 +6,7 @@ probar sin red y puede envolverse con el servidor elegido en Fase 3.
 
 from __future__ import annotations
 
+import hmac
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from enum import Enum
@@ -36,24 +37,46 @@ def _json(value):
 
 
 class Api:
-    def __init__(self, sessions, accounts, leagues, clock: Callable[[], datetime]) -> None:
+    def __init__(
+        self, sessions, accounts, leagues, clock: Callable[[], datetime],
+        auth=None, bff_shared_secret: str | None = None,
+    ) -> None:
         self.sessions = sessions
         self.accounts = accounts
         self.leagues = leagues
         self.clock = clock
+        self.auth = auth
+        self.bff_shared_secret = bff_shared_secret
 
     def handle(
         self, method: str, path: str, token: str | None = None,
-        body: dict | None = None,
+        body: dict | None = None, service_token: str | None = None,
     ) -> ApiResponse:
         body = body or {}
         try:
-            actor = self.sessions.authenticate(token)
             segments = [segment for segment in path.strip("/").split("/") if segment]
             if segments[:2] != ["api", "v1"]:
                 return ApiResponse(404, {"error": "not_found"})
             route = segments[2:]
             now = self.clock()
+            if method == "POST" and route == ["auth", "session"]:
+                configured = self.auth is not None and self.bff_shared_secret
+                valid_service = configured and service_token and hmac.compare_digest(
+                    self.bff_shared_secret, service_token
+                )
+                if not valid_service:
+                    raise Forbidden("BFF no autorizado")
+                session = self.auth.exchange_auth0(
+                    str(body.get("id_token", "")), str(body.get("nonce", "")), now
+                )
+                return ApiResponse(201, {
+                    "session_token": session,
+                    "expires_in": int(self.sessions.TTL.total_seconds()),
+                })
+            actor = self.sessions.authenticate(token)
+            if method == "POST" and route == ["auth", "logout"]:
+                self.sessions.revoke(token, now)
+                return ApiResponse(204, None)
             if method == "GET" and route == ["me"]:
                 return ApiResponse(200, _json(self.accounts.export(actor, actor)))
             if method == "PATCH" and route == ["me", "profile"]:
