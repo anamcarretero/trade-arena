@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from contextlib import contextmanager
 from datetime import datetime
+from uuid import UUID
 
 import psycopg
 from psycopg.errors import UniqueViolation
@@ -12,10 +13,13 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from tradearena.application.models import (
-    Competition, CompetitionStatus, Invitation, InvitationStatus, League,
-    Membership, Profile, Role, TradingAccount, User,
+    AuditEvent, Competition, CompetitionStatus, Invitation, InvitationStatus,
+    League, Membership, Notification, Profile, Role, TradingAccount, User,
 )
 from tradearena.domain.ranking import RankingRow, RankingSnapshot
+from tradearena.application.dashboard import (
+    CompetitionBadge, PortfolioProjection, RankingProjection,
+)
 from tradearena.domain.trading import (
     Execution, ExecutionSource, JournalEntry, Order, OrderSide, OrderStatus, OrderType,
     Portfolio, Posting, Session,
@@ -405,6 +409,12 @@ class PostgresInvitations(_Repository):
         ).fetchone()
         return row["total"]
 
+    def anonymize_email(self, email: str, replacement: str) -> None:
+        self.connection.execute(
+            "UPDATE league_invitations SET email = %s WHERE lower(email) = lower(%s)",
+            (replacement, email),
+        )
+
 
 class PostgresCompetitions(_Repository):
     def get(
@@ -708,6 +718,16 @@ class PostgresTrading(_Repository):
         ).fetchall()
         return [self.get(competition_id, str(item["user_id"])) for item in rows]
 
+    def list_for_user(self, user_id: str) -> list[TradingAccount]:
+        rows = self.connection.execute(
+            """
+            SELECT competition_id FROM competition_participants
+             WHERE user_id = %s ORDER BY competition_id
+            """,
+            (user_id,),
+        ).fetchall()
+        return [self.get(str(item["competition_id"]), user_id) for item in rows]
+
     def save_ranking(self, snapshot: RankingSnapshot) -> None:
         existing = self.connection.execute(
             "SELECT digest FROM ranking_snapshots WHERE competition_id = %s AND as_of = %s",
@@ -734,6 +754,96 @@ class PostgresTrading(_Repository):
         rows = tuple(RankingRow(**item) for item in row["rows"])
         return RankingSnapshot(competition_id, row["as_of"], rows, row["digest"])
 
+    def save_portfolio_projection(self, snapshot: PortfolioProjection) -> None:
+        row = self.connection.execute(
+            """SELECT digest FROM portfolio_snapshots
+                WHERE portfolio_id = %s AND trading_day = %s AND provisional = %s""",
+            (snapshot.portfolio_id, snapshot.trading_day, snapshot.provisional),
+        ).fetchone()
+        if row and row["digest"] == snapshot.digest:
+            return
+        if row:
+            self.connection.execute(
+                """DELETE FROM portfolio_snapshots
+                    WHERE portfolio_id = %s AND trading_day = %s AND provisional = %s""",
+                (snapshot.portfolio_id, snapshot.trading_day, snapshot.provisional),
+            )
+        self.connection.execute(
+            """INSERT INTO portfolio_snapshots(
+                   portfolio_id, as_of, equity, cumulative_return, state, digest,
+                   trading_day, provisional, calculation_version
+               ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'dashboard-v1')""",
+            (snapshot.portfolio_id, snapshot.as_of, snapshot.equity,
+             snapshot.cumulative_return, Jsonb(snapshot.state), snapshot.digest,
+             snapshot.trading_day, snapshot.provisional),
+        )
+
+    def list_portfolio_projections(self, portfolio_id: str) -> list[PortfolioProjection]:
+        rows = self.connection.execute(
+            """SELECT * FROM portfolio_snapshots
+                WHERE portfolio_id = %s AND trading_day IS NOT NULL
+                ORDER BY trading_day, provisional, as_of""", (portfolio_id,),
+        ).fetchall()
+        return [PortfolioProjection(
+            str(row["portfolio_id"]), row["trading_day"], row["as_of"],
+            row["provisional"], row["equity"], row["cumulative_return"],
+            row["state"], row["digest"],
+        ) for row in rows]
+
+    def save_ranking_projection(self, snapshot: RankingProjection) -> None:
+        row = self.connection.execute(
+            """SELECT digest FROM ranking_snapshots
+                WHERE competition_id = %s AND trading_day = %s AND provisional = %s""",
+            (snapshot.competition_id, snapshot.trading_day, snapshot.provisional),
+        ).fetchone()
+        if row and row["digest"] == snapshot.digest:
+            return
+        if row:
+            self.connection.execute(
+                """DELETE FROM ranking_snapshots
+                    WHERE competition_id = %s AND trading_day = %s AND provisional = %s""",
+                (snapshot.competition_id, snapshot.trading_day, snapshot.provisional),
+            )
+        self.connection.execute(
+            """INSERT INTO ranking_snapshots(
+                   competition_id, as_of, rows, digest, trading_day, provisional,
+                   calculation_version
+               ) VALUES (%s, %s, %s, %s, %s, %s, 'dashboard-v1')""",
+            (snapshot.competition_id, snapshot.as_of, Jsonb(list(snapshot.rows)),
+             snapshot.digest, snapshot.trading_day, snapshot.provisional),
+        )
+
+    def list_ranking_projections(self, competition_id: str) -> list[RankingProjection]:
+        rows = self.connection.execute(
+            """SELECT * FROM ranking_snapshots
+                WHERE competition_id = %s AND trading_day IS NOT NULL
+                ORDER BY trading_day, provisional, as_of""", (competition_id,),
+        ).fetchall()
+        return [RankingProjection(
+            str(row["competition_id"]), row["trading_day"], row["as_of"],
+            row["provisional"], tuple(row["rows"]), row["digest"],
+        ) for row in rows]
+
+    def save_badge(self, badge: CompetitionBadge, created_at: datetime) -> None:
+        self.connection.execute(
+            """INSERT INTO competition_badges(
+                   competition_id, user_id, achievement_key, achieved_on, state, created_at
+               ) VALUES (%s, %s, %s, %s, %s, %s)
+               ON CONFLICT (competition_id, user_id, achievement_key) DO NOTHING""",
+            (badge.competition_id, badge.user_id, badge.key, badge.achieved_on,
+             Jsonb(badge.state), created_at),
+        )
+
+    def list_badges(self, competition_id: str) -> list[CompetitionBadge]:
+        rows = self.connection.execute(
+            """SELECT * FROM competition_badges WHERE competition_id = %s
+               ORDER BY achieved_on, user_id, achievement_key""", (competition_id,),
+        ).fetchall()
+        return [CompetitionBadge(
+            str(row["competition_id"]), str(row["user_id"]),
+            row["achievement_key"], row["achieved_on"], row["state"],
+        ) for row in rows]
+
 
 class PostgresAudit(_Repository):
     def add(
@@ -749,6 +859,79 @@ class PostgresAudit(_Repository):
             (occurred_at, actor_id, action, resource_type, resource_id,
              Jsonb(metadata or {})),
         )
+
+    def list_for_user(self, user_id: str) -> list[AuditEvent]:
+        rows = self.connection.execute(
+            """
+            SELECT * FROM access_audit
+             WHERE actor_id = %s
+                OR (resource_type = 'user' AND resource_id = %s)
+                OR metadata ->> 'user_id' = %s
+             ORDER BY sequence
+            """,
+            (user_id, user_id, user_id),
+        ).fetchall()
+        return [AuditEvent(
+            item["sequence"], item["occurred_at"],
+            str(item["actor_id"]) if item["actor_id"] else None,
+            item["action"], item["resource_type"], item["resource_id"],
+            item["metadata"],
+        ) for item in rows]
+
+
+class PostgresNotifications(_Repository):
+    @staticmethod
+    def _map(row) -> Notification | None:
+        if row is None:
+            return None
+        return Notification(
+            str(row["id"]), str(row["user_id"]), row["kind"], row["payload"],
+            row["created_at"], row["read_at"],
+        )
+
+    def get(
+        self, notification_id: str, *, for_update: bool = False,
+    ) -> Notification | None:
+        try:
+            UUID(notification_id)
+        except ValueError:
+            return None
+        suffix = " FOR UPDATE" if for_update else ""
+        row = self.connection.execute(
+            "SELECT * FROM notifications WHERE id = %s" + suffix,
+            (notification_id,),
+        ).fetchone()
+        return self._map(row)
+
+    def add(self, notification: Notification) -> None:
+        self.connection.execute(
+            """
+            INSERT INTO notifications(id, user_id, kind, payload, created_at, read_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (notification.id, notification.user_id, notification.kind,
+             Jsonb(notification.payload), notification.created_at,
+             notification.read_at),
+        )
+
+    def save(self, notification: Notification) -> None:
+        self.connection.execute(
+            "UPDATE notifications SET read_at = %s WHERE id = %s",
+            (notification.read_at, notification.id),
+        )
+
+    def list_for_user(self, user_id: str) -> list[Notification]:
+        rows = self.connection.execute(
+            """
+            SELECT * FROM notifications WHERE user_id = %s
+             ORDER BY created_at DESC, id DESC
+            """,
+            (user_id,),
+        ).fetchall()
+        return [self._map(row) for row in rows]
+
+    def delete_for_user(self, user_id: str) -> None:
+        self.connection.execute("DELETE FROM notifications WHERE user_id = %s", (user_id,))
 
 
 class PostgresStore:
@@ -767,6 +950,7 @@ class PostgresStore:
         self.competitions = PostgresCompetitions(self)
         self.trading = PostgresTrading(self)
         self.audit = PostgresAudit(self)
+        self.notifications = PostgresNotifications(self)
 
     @contextmanager
     def transaction(self):

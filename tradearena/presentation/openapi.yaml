@@ -56,13 +56,55 @@ paths:
     get:
       operationId: exportOwnAccount
       responses:
-        "200": {description: Datos propios exportables}
+        "200":
+          description: Exportación completa y reproducible de datos propios, sin sesiones ni credenciales
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AccountExport"}
         "403": {$ref: "#/components/responses/Forbidden"}
     delete:
       operationId: deleteOwnAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirm_account_deletion]
+              properties:
+                confirm_account_deletion: {type: boolean, const: true}
       responses:
         "204": {description: Cuenta eliminada}
+        "400": {description: Falta confirmación explícita}
         "403": {$ref: "#/components/responses/Forbidden"}
+  /api/v1/notifications:
+    get:
+      operationId: listOwnNotifications
+      responses:
+        "200":
+          description: Notificaciones privadas de la sesión, nuevas primero
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/Notification"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+  /api/v1/notifications/{notification_id}/read:
+    post:
+      operationId: markOwnNotificationRead
+      parameters:
+        - name: notification_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Notificación propia marcada como leída de forma idempotente
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Notification"}
+        "404": {description: Notificación inexistente o ajena}
   /api/v1/me/profile:
     patch:
       operationId: updateOwnProfile
@@ -244,7 +286,7 @@ paths:
               schema: {$ref: "#/components/schemas/Portfolio"}
         "400": {description: Campos, precisión, USD/FX, total o comisión inválidos}
         "404": {description: Liga, competición o cartera no accesible}
-        "409": {description: Fecha, cronología, saldo, posición o idempotencia en conflicto}
+        "409": {description: Fecha, saldo o posición históricos, o idempotencia en conflicto}
   /api/v1/leagues/{league_id}/competitions/{competition_id}/reported-trades/{execution_id}/corrections:
     post:
       operationId: correctReportedCompetitionTrade
@@ -299,6 +341,19 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Ranking"}
+        "404": {description: Liga o competición no accesible}
+  /api/v1/leagues/{league_id}/competitions/{competition_id}/dashboard:
+    get:
+      operationId: getCompetitionDashboard
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+        - {$ref: "#/components/parameters/CompetitionId"}
+      responses:
+        "200":
+          description: Analítica porcentual saneada de la competición
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/CompetitionDashboard"}
         "404": {description: Liga o competición no accesible}
   /api/v1/leagues/{league_id}/invitations:
     post:
@@ -359,6 +414,28 @@ paths:
         "404": {description: Liga no accesible}
 components:
   schemas:
+    AccountExport:
+      type: object
+      required: [schema_version, user, profile, memberships, invitations, notifications, financial_history, audit]
+      properties:
+        schema_version: {type: string, const: "1"}
+        user: {type: object, additionalProperties: true}
+        profile: {oneOf: [{type: object, additionalProperties: true}, {type: "null"}]}
+        memberships: {type: array, items: {type: object, additionalProperties: true}}
+        invitations: {type: array, items: {type: object, additionalProperties: true}}
+        notifications: {type: array, items: {$ref: "#/components/schemas/Notification"}}
+        financial_history: {type: array, items: {type: object, additionalProperties: true}}
+        audit: {type: array, items: {type: object, additionalProperties: true}}
+    Notification:
+      type: object
+      additionalProperties: false
+      required: [id, kind, payload, created_at, read_at]
+      properties:
+        id: {type: string}
+        kind: {type: string}
+        payload: {type: object, additionalProperties: true}
+        created_at: {type: string, format: date-time}
+        read_at: {oneOf: [{type: string, format: date-time}, {type: "null"}]}
     Role:
       type: string
       enum: [owner, admin, member]
@@ -587,6 +664,70 @@ components:
         as_of: {type: string, format: date-time}
         rows: {type: array, items: {$ref: "#/components/schemas/RankingRow"}}
         digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+    DashboardAllocation:
+      type: object
+      additionalProperties: false
+      required: [symbol, weight]
+      properties:
+        symbol: {type: string}
+        weight: {type: string, description: Fracción decimal entre cero y uno}
+    DashboardSeriesPoint:
+      type: object
+      additionalProperties: false
+      required: [date, as_of, provisional, daily_return, cumulative_return, complete]
+      properties:
+        date: {type: string, format: date}
+        as_of: {type: string, format: date-time}
+        provisional: {type: boolean}
+        daily_return: {oneOf: [{type: string}, {type: "null"}]}
+        cumulative_return: {oneOf: [{type: string}, {type: "null"}]}
+        complete: {type: boolean}
+    DashboardPlayer:
+      type: object
+      additionalProperties: false
+      required: [id, display_name, rank, active, joined_at, joined_late, as_of, cumulative_return, statistics, series, allocation, badges]
+      properties:
+        id: {type: string}
+        display_name: {type: string}
+        rank: {oneOf: [{type: integer, minimum: 1}, {type: "null"}]}
+        active: {type: boolean}
+        joined_at: {type: string, format: date-time}
+        joined_late: {type: boolean}
+        as_of: {oneOf: [{type: string, format: date-time}, {type: "null"}]}
+        cumulative_return: {oneOf: [{type: string}, {type: "null"}]}
+        statistics: {type: object, additionalProperties: true}
+        series: {type: array, items: {$ref: "#/components/schemas/DashboardSeriesPoint"}}
+        allocation: {type: array, items: {$ref: "#/components/schemas/DashboardAllocation"}}
+        badges: {type: array, items: {type: object, additionalProperties: true}}
+    DashboardTrade:
+      type: object
+      additionalProperties: false
+      required: [player_id, display_name, executed_at, symbol, type, source]
+      properties:
+        player_id: {type: string}
+        display_name: {type: string}
+        executed_at: {type: string, format: date-time}
+        symbol: {type: string}
+        type: {type: string, enum: [buy, sell, correction]}
+        source: {type: string, enum: [fixture, reported]}
+    CompetitionDashboard:
+      type: object
+      additionalProperties: false
+      required: [competition, data_status, players, summary, monthly, daily_winners, daily_results, league_allocation, recent_trades, badges, insights, missing_data, ticker_record]
+      properties:
+        competition: {type: object, additionalProperties: true}
+        data_status: {type: string, enum: [complete, provisional, incomplete, empty]}
+        players: {type: array, items: {$ref: "#/components/schemas/DashboardPlayer"}}
+        summary: {type: object, additionalProperties: true}
+        monthly: {type: object, additionalProperties: true}
+        daily_winners: {type: array, items: {type: object, additionalProperties: true}}
+        daily_results: {type: array, items: {type: object, additionalProperties: true}}
+        league_allocation: {type: array, items: {$ref: "#/components/schemas/DashboardAllocation"}}
+        recent_trades: {type: array, maxItems: 8, items: {$ref: "#/components/schemas/DashboardTrade"}}
+        badges: {type: array, items: {type: object, additionalProperties: true}}
+        insights: {type: array, items: {type: object, additionalProperties: true}}
+        missing_data: {type: array, items: {type: object, additionalProperties: false, required: [date, symbol], properties: {date: {type: string, format: date}, symbol: {type: string}}}}
+        ticker_record: {type: "null", description: Reservado para el enriquecimiento licenciado de Fase 4}
   securitySchemes:
     bearerSession:
       type: http

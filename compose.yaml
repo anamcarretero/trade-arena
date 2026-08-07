@@ -7,6 +7,7 @@ x-api-base: &api-base
     AUTH0_DOMAIN: ${AUTH0_DOMAIN:?Define el dominio EU del tenant Auth0}
     AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID:?Define el client ID de Auth0}
     BFF_SHARED_SECRET: ${BFF_SHARED_SECRET:?Genera un secreto compartido API-BFF}
+    MARKET_DATA_PROVIDER: ${MARKET_DATA_PROVIDER:-fixture}
 
 services:
   postgres:

@@ -2,10 +2,10 @@
 
 from .services import (
     AccountService, AuthService, CompetitionService, LeagueService,
-    SessionService, TradingService,
+    NotificationService, SessionService, TradingService,
 )
 
 __all__ = [
     "AccountService", "AuthService", "CompetitionService", "LeagueService",
-    "SessionService", "TradingService",
+    "NotificationService", "SessionService", "TradingService",
 ]

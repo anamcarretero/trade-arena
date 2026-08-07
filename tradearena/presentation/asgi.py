@@ -98,6 +98,12 @@ class AuthSessionInput(BaseModel):
     nonce: str = Field(min_length=16)
 
 
+class DeleteAccountInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirm_account_deletion: bool
+
+
 _bearer = HTTPBearer(auto_error=False)
 
 
@@ -159,8 +165,27 @@ def create_app(api: Api, readiness: Callable[[], bool] | None = None) -> FastAPI
         return _response(api.handle("POST", "/api/v1/auth/logout", token))
 
     @app.delete("/api/v1/me", operation_id="deleteOwnAccount")
-    def delete_own_account(token: str | None = Depends(_token)):
-        return _response(api.handle("DELETE", "/api/v1/me", token))
+    def delete_own_account(
+        data: DeleteAccountInput, token: str | None = Depends(_token),
+    ):
+        return _response(api.handle(
+            "DELETE", "/api/v1/me", token, data.model_dump()
+        ))
+
+    @app.get("/api/v1/notifications", operation_id="listOwnNotifications")
+    def list_own_notifications(token: str | None = Depends(_token)):
+        return _response(api.handle("GET", "/api/v1/notifications", token))
+
+    @app.post(
+        "/api/v1/notifications/{notification_id}/read",
+        operation_id="markOwnNotificationRead",
+    )
+    def mark_own_notification_read(
+        notification_id: str, token: str | None = Depends(_token),
+    ):
+        return _response(api.handle(
+            "POST", f"/api/v1/notifications/{notification_id}/read", token
+        ))
 
     @app.patch("/api/v1/me/profile", operation_id="updateOwnProfile")
     def update_own_profile(data: ProfileInput, token: str | None = Depends(_token)):
@@ -321,6 +346,20 @@ def create_app(api: Api, readiness: Callable[[], bool] | None = None) -> FastAPI
         return _response(api.handle(
             "GET",
             f"/api/v1/leagues/{league_id}/competitions/{competition_id}/ranking",
+            token,
+        ))
+
+    @app.get(
+        "/api/v1/leagues/{league_id}/competitions/{competition_id}/dashboard",
+        operation_id="getCompetitionDashboard",
+    )
+    def get_competition_dashboard(
+        league_id: str, competition_id: str,
+        token: str | None = Depends(_token),
+    ):
+        return _response(api.handle(
+            "GET",
+            f"/api/v1/leagues/{league_id}/competitions/{competition_id}/dashboard",
             token,
         ))
 

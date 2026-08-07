@@ -14,13 +14,14 @@ añaden participante autenticado, propietario y administrador de liga. Sus
 recursos son privados y solo se exponen por `/api/v1` tras validar sesión y
 membresía activa.
 
-## 0. Flujos del producto nuevo hasta TA-035
+## 0. Flujos del producto nuevo hasta TA-037
 
 1. Identidad verifica un enlace de email de un solo uso o claims Google con
    emisor, audiencia y email verificado; después se emite una sesión propia.
-2. La persona mayor de edad completa nombre, idioma y consentimiento. Puede
-   exportar sus propios datos o borrar la cuenta; el borrado revoca sesiones y
-   anonimiza sin destruir la auditoría financiera.
+2. La persona mayor de edad completa nombre, idioma y consentimiento. Desde la
+   PWA puede exportar sus propios datos o borrar la cuenta; el borrado exige
+   confirmación, revoca todas las sesiones y anonimiza sin destruir la auditoría
+   financiera.
 3. Free permite crear una liga activa con capital virtual inicial fijo de
    3.000 USD por competición. El creador es propietario y puede invitar un
    segundo miembro. La aplicación genera un enlace para copiar y compartir;
@@ -160,8 +161,9 @@ TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
    antes de aplicar las reglas financieras.
 2. FastAPI vuelve a autenticar y Python oculta con `404` ligas, competiciones,
    carteras u operaciones ajenas. La competición debe estar activa; la fecha no
-   puede ser futura, queda dentro del calendario fijado, no precede a la
-   incorporación y no retrocede respecto a la última ejecución de la cartera.
+   puede ser futura, queda dentro del calendario fijado y no precede a la
+   incorporación. TA-037 admite altas retroactivas: Python reproduce los
+   eventos y vuelve a validar saldo y posición en la fecha declarada.
 3. Si la comisión queda vacía, la PWA sugiere en su campo la diferencia entre
    bruto y total. El backend vuelve a calcularla con `Decimal`: en compra es
    total menos cantidad × precio y en venta es cantidad × precio menos total.
@@ -181,6 +183,78 @@ TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
 
 TA-035 no incorpora notificaciones, exportación o borrado desde la PWA,
 facturación, Stripe, mercado licenciado, jobs programados ni staging.
+
+### Notificaciones, exportación y borrado de TA-036
+
+1. La persona abre «Notificaciones»/«Notifications» desde la PWA. FastAPI lista
+   únicamente sus filas, ordenadas de más reciente a más antigua, con estado
+   leído/no leído. No se expone `user_id` ni contenido sensible del payload.
+2. «Marcar como leída» vuelve a autenticar en el backend y fija `read_at` solo
+   si la notificación pertenece a la sesión. Repetir la petición devuelve la
+   misma fecha sin una segunda mutación. Una notificación ajena o inexistente
+   produce `404`.
+3. En «Cuenta y privacidad»/«Account and privacy», descargar la exportación
+   hace que el BFF solicite `GET /api/v1/me` con la sesión `HttpOnly` y entregue
+   un JSON de esquema 1 sin caché. Contiene solo cuenta, perfil, membresías,
+   invitaciones recibidas, notificaciones, auditoría relacionada y el historial
+   financiero completo de las carteras propias, incluido ledger. No contiene
+   el sujeto de la identidad externa, sesiones, tokens, secretos, credenciales, rankings
+   compartidos ni datos de otro participante.
+4. La exportación no incorpora una hora variable de generación y ordena sus
+   colecciones, por lo que el mismo estado produce el mismo documento.
+5. Para borrar, la persona debe activar una confirmación explícita. La Server
+   Action la transmite, pero Python vuelve a exigir el booleano verdadero; una
+   llamada manipulada sin confirmación se rechaza sin cambios.
+6. El borrado se ejecuta en una transacción: revoca todas las sesiones, elimina
+   identidades y perfil, anonimiza el email de cuenta e invitaciones, borra las
+   notificaciones privadas y retira membresías activas. Conserva UUID internos,
+   auditoría, participación, carteras, órdenes, ejecuciones y ledger.
+7. La cookie `HttpOnly` se elimina en el BFF tras el éxito. La cuenta borrada no
+   puede reutilizar ninguna sesión ni acceder a ligas, competiciones, carteras,
+   órdenes, operaciones o notificaciones. Los recursos privados ajenos siguen
+   respondiendo `404`.
+
+TA-036 no incorpora el trabajo general WCAG 2.2 AA de TA-038, infraestructura
+cloud, mercado licenciado, jobs, brokers, Friends, Club, Stripe ni facturación.
+
+### Dashboard de competición de TA-037
+
+1. Un miembro abre una tarjeta de competición y navega a su detalle. FastAPI
+   vuelve a comprobar sesión, membresía activa, liga y pertenencia de la
+   competición; cualquier combinación ajena responde `404`. Un borrador devuelve
+   identidad y `data_status=empty` sin crear cartera ni snapshot.
+2. Para cada participante se generan jornadas reales XNYS desde `joined_at`.
+   Los cierres usan las 16:00 de Nueva York y la sesión actual puede aparecer
+   provisional. Fin de semana y festivo no crean puntos.
+3. La proyección reproduce ejecuciones, comisiones y movimientos
+   compensatorios. Una cotización ausente no se rellena: la jornada permanece
+   visible pero incompleta y ningún retorno parcial se etiqueta como definitivo.
+4. La pantalla presenta líder, gap, series acumuladas, mejor jornada, ganadores
+   mensuales/diarios, resultados, estadísticas, rachas, badges, portfolios en
+   pesos con `CASH`, ocho operaciones saneadas e insights deterministas. Un
+   jugador o una jornada se despliega para mostrar su detalle porcentual.
+5. Los expulsados dejan de participar en la clasificación viva y conservan su
+   historia. Una cuenta eliminada aparece como participante anónimo. Los
+   empates se ordenan de manera estable por `user_id`.
+6. De otros jugadores se ven nombre, porcentajes, ticker, compra/venta o
+   corrección, origen, fechas, estadísticas y badges. Nunca se ven cantidades,
+   precio, total, comisión, efectivo/equity absolutos, ledger, órdenes o claves
+   idempotentes. La sección «Mi cartera y operaciones» mantiene los importes
+   propios y los formularios ya autorizados.
+7. Registrar o compensar una operación revalida el detalle y reconstruye los
+   puntos derivados. No modifica ni elimina la ejecución o el ledger original.
+8. Los «Insights de liga» son reglas locales estables sobre liderazgo,
+   distancia, jornadas y rachas. No se presentan como IA, no envían portfolios
+   a terceros y no contienen consejos ni predicciones.
+
+TA-037 no importa CSV/PDF, no consulta el ranking histórico ni sus datos
+cifrados y no sincroniza brokers. En desarrollo local se puede activar Yahoo
+con `MARKET_DATA_PROVIDER=yahoo`: se consulta una ventana de cierres por
+símbolo a través de `MarketDataPort`, y cualquier fallo deja las jornadas
+afectadas incompletas. Esta configuración no se utiliza en despliegues públicos.
+Las fichas enriquecidas de
+ticker, históricos, consenso neutral y récord de activo esperan a la Fase 4 y a
+una licencia confirmada.
 
 Para ejecutar el backend contra PostgreSQL se aplican primero las migraciones
 con `DATABASE_URL=... python3 -m tradearena migrate` y se arranca después la API

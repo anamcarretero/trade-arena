@@ -152,6 +152,17 @@ de los participantes iniciales con el comienzo del calendario de competición,
 también cuando el administrador la inicia más tarde. Solo corrige filas con
 `joined_late=false`; una incorporación tardía conserva su instante real.
 
+`migrations/009_notifications_privacy.sql` indexa el centro privado de
+notificaciones por usuario/fecha y la auditoría exportable por actor. No altera
+ni destruye filas anteriores y puede aplicarse tanto sobre la 008 como al crear
+un esquema vacío.
+
+`migrations/010_competition_dashboard.sql` completa el estado de proyección de
+`portfolio_snapshots` y `ranking_snapshots` con jornada, provisionalidad y
+versión de cálculo, además de índices para cierres canónicos idempotentes.
+`competition_badges` conserva cada logro por competición y participante con
+restricción única; recalcular no borra un logro concedido.
+
 Al crear una liga Free se bloquea la fila del propietario antes de comprobar
 su límite, y el índice parcial mantiene una segunda defensa. Al invitar o
 aceptar se bloquea la liga antes de contar miembros e invitaciones pendientes,
@@ -250,9 +261,14 @@ motor aplica al ejecutarla la comisión regular o ampliada del snapshot. Las
 calendario fijado o suspensión definitiva indicada por el puerto de mercado.
 
 Durante TA-035 `FixtureMarketDataAdapter` proporciona precios deterministas en
-desarrollo y pruebas; producción se compone con un adaptador vacío hasta la
-integración licenciada y los jobs de Fase 4. No se consulta Yahoo ni se acepta
-un precio enviado por el navegador. La valoración genera snapshots de cartera
+pruebas. Para desarrollo local puede seleccionarse
+`YahooFinanceMarketDataAdapter` con `MARKET_DATA_PROVIDER=yahoo`; la raíz de
+composición es la única que conoce esa elección y los casos de uso continúan
+dependiendo de `MarketDataPort`. El dashboard precarga una ventana por símbolo,
+mantiene la respuesta incompleta ante un fallo y no arrastra cierres. Esta vía
+no está autorizada para despliegue público: producción permanece con fixtures
+hasta la integración licenciada y los jobs de Fase 4. Nunca se acepta un precio
+enviado por el navegador. La valoración genera snapshots de cartera
 y ranking porcentual con hash estable, desempate por usuario y marca visible de
 incorporación tardía.
 
@@ -261,7 +277,9 @@ registra una ejecución simulada ya realizada, no una orden pendiente. Recibe
 fecha, ticker, tipo, cantidad, precio por acción, total, moneda, FX y clave
 idempotente. Python valida que la competición siga activa, el timestamp esté
 dentro del calendario de `rules_snapshot`, no sea futuro ni anterior a la
-incorporación y mantenga la cronología de la cartera. V1 exige USD/FX 1. La
+incorporación. Desde TA-037 una declaración retroactiva se acepta solo si la
+reproducción histórica conserva saldo y posición; los derivados se reconstruyen
+desde esa jornada sin alterar las ejecuciones o el ledger previos. V1 exige USD/FX 1. La
 comisión es opcional: si se omite, Python la infiere del bruto y el total; si
 se proporciona, exige que coincida al céntimo con ambos.
 La API interpreta fechas sin offset mediante la zona elegida (`Europe/Madrid`
@@ -285,6 +303,66 @@ Actions solo envían referencias y campos de orden. La PWA responsive ES/EN
 muestra cifras calculadas por Python; TypeScript solo sugiere la diferencia
 aritmética en el campo de comisión y no decide saldo, validez del total,
 posición, valoración ni rentabilidad.
+
+TA-036 activa `NotificationService` y el repositorio `notifications` con el
+mismo contrato en memoria y PostgreSQL. `GET /api/v1/notifications` lista solo
+las notificaciones de la sesión, nuevas primero, y
+`POST /api/v1/notifications/{id}/read` fija `read_at` una sola vez. Repetir la
+acción devuelve el mismo resultado sin duplicar auditoría; un identificador
+ajeno o inexistente responde `404`. Python elimina de los payloads cualquier
+clave asociada a tokens, secretos, contraseñas, credenciales, autorización o
+cookies antes de persistirla o exponerla.
+
+La exportación de `GET /api/v1/me` queda versionada como esquema 1, ordenada y
+sin una marca de generación variable: incluye cuenta y perfil propios,
+membresías e invitaciones recibidas, notificaciones, auditoría relacionada y
+cada cartera propia con competición, posiciones, órdenes, ejecuciones y ledger.
+Excluye sujetos de identidades externas, hashes de sesión, tokens, secretos, credenciales,
+rankings compartidos y datos financieros de otros participantes. La ruta BFF
+`/account/export` entrega exactamente ese JSON como descarga sin caché; no
+reconstruye reglas de privacidad en TypeScript.
+
+`DELETE /api/v1/me` exige `confirm_account_deletion=true` en el backend. En una
+única transacción marca la cuenta como eliminada, sustituye el email por un
+alias irreversible ligado al UUID, elimina identidades y perfil, anonimiza ese
+email en invitaciones, borra notificaciones, retira membresías activas y revoca
+todas las sesiones. Se conservan UUID internos, auditoría, participaciones,
+carteras, órdenes, ejecuciones y ledger para integridad financiera. Al no quedar
+sesión ni membresía activa, la cuenta eliminada no puede acceder a ligas,
+competiciones, carteras, órdenes, operaciones o notificaciones; las fronteras
+privadas mantienen `404` para recursos ajenos.
+
+TA-037 añade una proyección de aplicación separada del ranking puntual. Recorre
+las jornadas XNYS desde el `rules_snapshot`, usa las 16:00 de Nueva York como
+cierre canónico y admite un punto provisional para la sesión actual. Reproduce
+solo ejecuciones efectivas, incluidas comisiones y compensaciones, desde
+`joined_at`. Para una posición abierta exige una cotización de esa misma sesión:
+no arrastra cierres ni usa el precio declarado como sustituto. Un hueco marca
+la jornada y el contrato como `incomplete`.
+
+`DashboardService` autoriza de nuevo sesión, membresía, liga y pertenencia de
+competición antes de construir
+`GET /api/v1/leagues/{league_id}/competitions/{competition_id}/dashboard`.
+El contrato contiene exclusivamente retornos, posiciones de ranking, pesos,
+estadísticas, badges e información saneada de ejecuciones. Los importes usados
+internamente para valorar y normalizar se descartan: cantidades, precios,
+totales, comisiones, efectivo, equity, ledger, órdenes y claves idempotentes de
+otros participantes no alcanzan la respuesta. Las cuentas eliminadas reciben
+un nombre anónimo y los expulsados conservan historia pero no rango vivo.
+
+La PWA mueve el panel completo a
+`/{locale}/app/leagues/{leagueId}/competitions/{competitionId}`. El detalle de
+liga solo muestra tarjetas enlazables. La nueva pantalla renderiza series SVG
+con color estable derivado del participante, meses, ganadores, operaciones,
+insights deterministas, standings, portfolios porcentuales y jornadas; los
+detalles desplegables sustituyen tablas anchas en móvil. El panel monetario de
+la cartera propia sigue usando el endpoint privado anterior.
+
+TA-037 no lee `players/`, `data/public/`, cifrados, CSV/PDF ni módulos de
+`trader/`; tampoco llama a brokers, modelos generativos o servicios de IA. La
+excepción temporal de desarrollo para Yahoo está aislada tras `MarketDataPort`
+y no reutiliza cachés ni código del legado. El enriquecimiento licenciado de ticker, históricos y consenso neutral de
+analistas queda en Fase 4 y se omite si no hay proveedor autorizado.
 
 ### Portabilidad operativa
 

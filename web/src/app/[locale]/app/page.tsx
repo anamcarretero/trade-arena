@@ -25,11 +25,11 @@ export default async function Dashboard({params, searchParams}: {
   return <main className="app-shell arena-shell">
     <header className="topbar app-topbar">
       <Link className="wordmark" href={`/${rawLocale}/app`}>TRADE<span>ARENA</span></Link>
-      <div className="app-nav"><Link href={`/${rawLocale}/app/profile`}>{text.editProfile}</Link><LocaleSwitcher locale={rawLocale} suffix="/app" /></div>
+      <div className="app-nav"><Link href={`/${rawLocale}/app/notifications`}>{text.notifications}</Link><Link href={`/${rawLocale}/app/account`}>{text.account}</Link><Link href={`/${rawLocale}/app/profile`}>{text.editProfile}</Link><LocaleSwitcher locale={rawLocale} suffix="/app" /></div>
     </header>
 
     <section className="arena-hero">
-      <div><p className="eyebrow">{account.user.email}</p><h1>{text.arenaHome}</h1><p>{text.arenaIntro}</p></div>
+      <div><p className="eyebrow">{account.user.email}</p><h1>{text.arenaHome}</h1><p>{text.arenaIntro}</p><nav className="mobile-account-nav"><Link href={`/${rawLocale}/app/notifications`}>{text.notifications}</Link><Link href={`/${rawLocale}/app/account`}>{text.account}</Link></nav></div>
       <form action="/auth/logout" method="post"><button className="text-button" type="submit">{text.logout}</button></form>
     </section>
 

@@ -51,7 +51,7 @@ class Api:
     def __init__(
         self, sessions, accounts, leagues, clock: Callable[[], datetime],
         auth=None, bff_shared_secret: str | None = None, competitions=None,
-        trading=None,
+        trading=None, notifications=None, dashboard=None,
     ) -> None:
         self.sessions = sessions
         self.accounts = accounts
@@ -61,6 +61,8 @@ class Api:
         self.bff_shared_secret = bff_shared_secret
         self.competitions = competitions
         self.trading = trading
+        self.notifications = notifications
+        self.dashboard = dashboard
 
     def handle(
         self, method: str, path: str, token: str | None = None,
@@ -101,8 +103,18 @@ class Api:
                 )
                 return ApiResponse(200, _json(asdict(profile)))
             if method == "DELETE" and route == ["me"]:
-                self.accounts.delete(actor, actor, now)
+                self.accounts.delete(
+                    actor, actor, now,
+                    confirmed=body.get("confirm_account_deletion") is True,
+                )
                 return ApiResponse(204, None)
+            if route == ["notifications"] and method == "GET":
+                return ApiResponse(200, _json(self.notifications.list_for(actor)))
+            if len(route) == 3 and route[0] == "notifications" \
+                    and route[2] == "read" and method == "POST":
+                return ApiResponse(200, _json(
+                    self.notifications.mark_read(actor, route[1], now)
+                ))
             if route == ["invitations"] and method == "GET":
                 return ApiResponse(200, [
                     _json(asdict(item))
@@ -210,6 +222,14 @@ class Api:
                     and method == "GET":
                 result = self.trading.ranking(actor, route[1], route[3], now)
                 return ApiResponse(200, _json(asdict(result)))
+            if len(route) == 5 and route[0] == "leagues" \
+                    and route[2] == "competitions" and route[4] == "dashboard" \
+                    and method == "GET":
+                if self.dashboard is None:
+                    return ApiResponse(404, {"error": "not_found"})
+                return ApiResponse(200, _json(
+                    self.dashboard.get(actor, route[1], route[3], now)
+                ))
             if len(route) == 3 and route[0] == "leagues" \
                     and route[2] == "invitations" and method == "POST":
                 invitation = self.leagues.invite(

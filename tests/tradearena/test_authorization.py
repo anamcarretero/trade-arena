@@ -5,8 +5,8 @@ import pytest
 from tradearena.adapters.memory import MemoryStore
 from tradearena.application.models import InvitationStatus
 from tradearena.application.services import (
-    AccountService, Forbidden, LeagueService, NotFound, PlanLimitExceeded,
-    SessionService,
+    AccountService, Forbidden, LeagueService, NotificationService, NotFound,
+    PlanLimitExceeded, SessionService,
 )
 from tradearena.ports.identity import IdentityAssertion
 from tradearena.presentation.api import Api
@@ -164,7 +164,7 @@ def test_member_cannot_invite_and_deleted_session_is_revoked(app):
         leagues.invite(member.id, league.id, "x@example.com", NOW)
     with pytest.raises(Forbidden):
         leagues.remove_member(member.id, league.id, owner.id, NOW)
-    accounts.delete(member.id, member.id, NOW)
+    accounts.delete(member.id, member.id, NOW, confirmed=True)
     # La frontera HTTP no admite reutilizar la sesión tras borrar la cuenta.
     with pytest.raises(Forbidden):
         SessionService(leagues.store).authenticate(member_token)
@@ -178,3 +178,17 @@ def test_export_is_self_only_and_age_policy_is_server_side(app):
         accounts.set_profile(
             owner.id, "Owner", "es", NOW.date().replace(year=NOW.year - 17), NOW, NOW
         )
+
+
+def test_notification_resource_of_another_user_is_hidden_with_404(app):
+    store, _, _, _, owner, outsider, _, _, _, _ = app
+    notifications = NotificationService(store, lambda: "notification-owner")
+    created = notifications.create(owner.id, "private", {"message": "Owner"}, NOW)
+
+    assert notifications.list_for(outsider.id) == []
+    with pytest.raises(NotFound):
+        notifications.mark_read(outsider.id, created.id, NOW)
+    first = notifications.mark_read(owner.id, created.id, NOW)
+    second = notifications.mark_read(owner.id, created.id, NOW + timedelta(hours=1))
+    assert first["read_at"] == second["read_at"] == NOW
+    assert [item.action for item in store.audit_events].count("notification.read") == 1

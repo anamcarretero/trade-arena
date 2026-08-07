@@ -17,6 +17,8 @@ export type ApiRoute = ApiPath
   | `/api/v1/leagues/${string}/competitions/${string}/reported-trades`
   | `/api/v1/leagues/${string}/competitions/${string}/reported-trades/${string}/corrections`
   | `/api/v1/leagues/${string}/competitions/${string}/ranking`
+  | `/api/v1/leagues/${string}/competitions/${string}/dashboard`
+  | `/api/v1/notifications/${string}/read`
   | `/api/v1/invitations/${string}`;
 export type OwnAccount = {
   user: {id: string; email: string};
@@ -27,6 +29,8 @@ export type OwnInvitation = components["schemas"]["OwnInvitation"];
 export type Competition = components["schemas"]["Competition"];
 export type Portfolio = components["schemas"]["Portfolio"];
 export type Ranking = components["schemas"]["Ranking"];
+export type CompetitionDashboard = components["schemas"]["CompetitionDashboard"];
+export type Notification = components["schemas"]["Notification"];
 
 export async function apiFetch(path: ApiRoute, init: RequestInit = {}) {
   const token = await readSessionToken();
@@ -65,6 +69,13 @@ export async function ownInvitations(): Promise<OwnInvitation[] | null> {
   return response.json();
 }
 
+export async function ownNotifications(): Promise<Notification[] | null> {
+  const response = await apiFetch("/api/v1/notifications");
+  if (response.status === 403) return null;
+  if (!response.ok) throw new Error(`TradeArena API returned ${response.status}`);
+  return response.json();
+}
+
 export async function leagueCompetitions(leagueId: string): Promise<Competition[] | null> {
   const response = await apiFetch(
     `/api/v1/leagues/${encodeURIComponent(leagueId)}/competitions`
@@ -90,6 +101,17 @@ export async function competitionRanking(
 ): Promise<Ranking | null> {
   const response = await apiFetch(
     `/api/v1/leagues/${encodeURIComponent(leagueId)}/competitions/${encodeURIComponent(competitionId)}/ranking`
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`TradeArena API returned ${response.status}`);
+  return response.json();
+}
+
+export async function competitionDashboard(
+  leagueId: string, competitionId: string
+): Promise<CompetitionDashboard | null> {
+  const response = await apiFetch(
+    `/api/v1/leagues/${encodeURIComponent(leagueId)}/competitions/${encodeURIComponent(competitionId)}/dashboard`
   );
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`TradeArena API returned ${response.status}`);

@@ -13,8 +13,9 @@ from typing import Callable
 from .models import (
     Competition, CompetitionStatus, CompetitionView, Invitation,
     InvitationStatus, League, LeagueInvitationView, LeagueMemberView, LeagueView,
-    ExecutionView, Membership, OrderView, OwnInvitationView, PortfolioView,
-    PositionView, Profile, RankingView, Role, TradingAccount, User,
+    ExecutionView, Membership, Notification, OrderView,
+    OwnInvitationView, PortfolioView, PositionView, Profile, RankingView, Role,
+    TradingAccount, User,
 )
 from tradearena.ports.identity import IdentityAssertion
 from tradearena.ports.store import StoreConflict
@@ -25,6 +26,7 @@ from tradearena.domain.trading import (
     Session, TradingEngine,
 )
 from tradearena.domain.money import decimal, money, price, quantity
+from tradearena.application.dashboard import assemble_dashboard, empty_dashboard
 
 
 class ApplicationError(Exception):
@@ -183,32 +185,180 @@ class AccountService:
         with self.store.transaction() as uow:
             user = self._active_user(uow, user_id)
             profile = uow.profiles.get(user_id)
-            memberships = [
-                asdict(item) for item in uow.memberships.list_for_user(user_id)
-            ]
-            invitations = [
-                asdict(item) for item in uow.invitations.list_for_email(user.email)
-            ]
+            memberships = []
+            for item in uow.memberships.list_for_user(user_id):
+                league = uow.leagues.get(item.league_id)
+                memberships.append({
+                    **asdict(item),
+                    "league_name": league.name if league else None,
+                    "league_plan": league.plan if league else None,
+                })
+            memberships = sorted(
+                memberships,
+                key=lambda item: (item["joined_at"], item["league_id"]),
+            )
+            invitations = []
+            for item in uow.invitations.list_for_email(user.email):
+                league = uow.leagues.get(item.league_id)
+                invitations.append({
+                    "id": item.id,
+                    "league_id": item.league_id,
+                    "email": item.email,
+                    "role": item.role,
+                    "created_at": item.created_at,
+                    "expires_at": item.expires_at,
+                    "status": item.status,
+                    "accepted_by_self": item.accepted_by == user_id,
+                    "league_name": league.name if league else None,
+                })
+            invitations = sorted(
+                invitations,
+                key=lambda item: (item["created_at"], item["id"]),
+            )
+            financial_history = []
+            for account in uow.trading.list_for_user(user_id):
+                competition = uow.competitions.get(account.competition_id)
+                if competition is None:
+                    continue
+                league = uow.leagues.get(competition.league_id)
+                financial_history.append(self._export_trading_account(
+                    account, competition, league,
+                ))
             return {
-                "user": asdict(user),
+                "schema_version": "1",
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "identity_provider": user.identity_provider,
+                    "created_at": user.created_at,
+                },
                 "profile": asdict(profile) if profile else None,
                 "memberships": memberships,
                 "invitations": invitations,
+                "notifications": [
+                    NotificationService.view(item)
+                    for item in uow.notifications.list_for_user(user_id)
+                ],
+                "financial_history": financial_history,
+                "audit": [self._export_audit(item, user_id)
+                          for item in uow.audit.list_for_user(user_id)],
             }
 
-    def delete(self, actor_id: str, user_id: str, now: datetime) -> None:
+    def delete(
+        self, actor_id: str, user_id: str, now: datetime, *, confirmed: bool,
+    ) -> None:
         if actor_id != user_id:
             raise Forbidden("solo se puede borrar la cuenta propia")
+        if not confirmed:
+            raise InvalidInput("el borrado exige confirmación explícita")
         with self.store.transaction() as uow:
             user = self._active_user(uow, user_id)
+            previous_email = user.email
+            anonymous_email = f"deleted+{user.id}@invalid.local"
             user.deleted_at = now
-            user.email = f"deleted+{user.id}@invalid.local"
+            user.email = anonymous_email
             uow.users.save(user)
             uow.users.delete_identities(user_id)
             uow.profiles.delete(user_id)
+            uow.invitations.anonymize_email(previous_email, anonymous_email)
+            uow.notifications.delete_for_user(user_id)
             uow.memberships.remove_active_for_user(user_id, now)
             uow.sessions.revoke_for_user(user_id, now)
             uow.audit.add(now, user_id, "account.deleted", "user", user_id)
+
+    @staticmethod
+    def _export_trading_account(account, competition, league) -> dict:
+        portfolio = account.portfolio
+        return {
+            "league": ({
+                "id": league.id, "name": league.name, "plan": league.plan,
+            } if league else {"id": competition.league_id}),
+            "competition": {
+                "id": competition.id,
+                "name": competition.name,
+                "starts_at": competition.starts_at,
+                "ends_at": competition.ends_at,
+                "status": competition.status,
+                "rules_snapshot": copy.deepcopy(competition.rules_snapshot),
+                "started_at": competition.started_at,
+            },
+            "participation": {
+                "user_id": account.user_id,
+                "joined_at": account.joined_at,
+                "joined_late": account.joined_late,
+            },
+            "portfolio": {
+                "id": portfolio.id,
+                "currency": "USD",
+                "initial_cash": str(portfolio.initial_cash),
+                "cash": str(portfolio.cash),
+                "positions": [
+                    {"symbol": symbol, "quantity": str(value)}
+                    for symbol, value in sorted(portfolio.positions.items())
+                ],
+                "orders": [{
+                    "id": item.id,
+                    "symbol": item.symbol,
+                    "side": item.side,
+                    "quantity": str(item.quantity),
+                    "order_type": item.order_type,
+                    "allow_extended_hours": item.allow_extended_hours,
+                    "submitted_at": item.submitted_at,
+                    "limit_price": (str(item.limit_price)
+                                    if item.limit_price is not None else None),
+                    "status": item.status,
+                    "rejection_reason": item.rejection_reason,
+                    "commission": (str(item.commission)
+                                   if item.commission is not None else None),
+                } for item in sorted(
+                    portfolio.orders.values(), key=lambda row: (row.submitted_at, row.id)
+                )],
+                "executions": [{
+                    "id": item.id,
+                    "order_id": item.order_id,
+                    "symbol": item.symbol,
+                    "side": item.side,
+                    "quantity": str(item.quantity),
+                    "price": str(item.price),
+                    "commission": str(item.commission),
+                    "executed_at": item.executed_at,
+                    "session": item.session,
+                    "source": item.source,
+                    "total_amount": (str(item.total_amount)
+                                     if item.total_amount is not None else None),
+                    "currency": item.currency,
+                    "fx_rate": str(item.fx_rate),
+                    "correction_of": item.correction_of,
+                } for item in sorted(
+                    portfolio.executions, key=lambda row: (row.executed_at, row.id)
+                )],
+                "ledger": [{
+                    "sequence": item.sequence,
+                    "occurred_at": item.occurred_at,
+                    "kind": item.kind,
+                    "reference": item.reference,
+                    "postings": [
+                        {"account": posting.account, "amount": str(posting.amount)}
+                        for posting in item.postings
+                    ],
+                } for item in sorted(portfolio.ledger, key=lambda row: row.sequence)],
+            },
+        }
+
+    @staticmethod
+    def _export_audit(item, user_id: str) -> dict:
+        metadata = NotificationService._safe_payload(item.metadata)
+        if metadata.get("user_id") != user_id:
+            metadata.pop("user_id", None)
+        return {
+            "sequence": item.sequence,
+            "occurred_at": item.occurred_at,
+            "actor_is_self": item.actor_id == user_id,
+            "action": item.action,
+            "resource_type": item.resource_type,
+            "resource_id": item.resource_id,
+            "metadata": metadata,
+        }
 
     @staticmethod
     def _active_user(uow, user_id: str) -> User:
@@ -216,6 +366,77 @@ class AccountService:
         if not user or user.deleted_at is not None:
             raise NotFound("cuenta no encontrada")
         return user
+
+
+class NotificationService:
+    _PRIVATE_KEY_PARTS = (
+        "token", "secret", "password", "credential", "authorization", "cookie",
+    )
+
+    def __init__(self, store, id_factory: Callable[[], str]) -> None:
+        self.store = store
+        self._id = id_factory
+
+    def create(
+        self, user_id: str, kind: str, payload: dict[str, object], now: datetime,
+    ) -> Notification:
+        normalized_kind = kind.strip()
+        if not normalized_kind or len(normalized_kind) > 80:
+            raise InvalidInput("tipo de notificación inválido")
+        with self.store.transaction() as uow:
+            AccountService._active_user(uow, user_id)
+            notification = Notification(
+                self._id(), user_id, normalized_kind,
+                self._safe_payload(payload), now,
+            )
+            uow.notifications.add(notification)
+            return notification
+
+    def list_for(self, actor_id: str) -> list[dict[str, object]]:
+        with self.store.transaction() as uow:
+            AccountService._active_user(uow, actor_id)
+            return [self.view(item) for item in uow.notifications.list_for_user(actor_id)]
+
+    def mark_read(
+        self, actor_id: str, notification_id: str, now: datetime,
+    ) -> dict[str, object]:
+        with self.store.transaction() as uow:
+            AccountService._active_user(uow, actor_id)
+            notification = uow.notifications.get(notification_id, for_update=True)
+            if not notification or notification.user_id != actor_id:
+                raise NotFound("notificación no encontrada")
+            if notification.read_at is None:
+                notification.read_at = now
+                uow.notifications.save(notification)
+                uow.audit.add(
+                    now, actor_id, "notification.read", "notification",
+                    notification.id,
+                )
+            return self.view(notification)
+
+    @classmethod
+    def view(cls, notification: Notification) -> dict[str, object]:
+        return {
+            "id": notification.id,
+            "kind": notification.kind,
+            "payload": cls._safe_payload(notification.payload),
+            "created_at": notification.created_at,
+            "read_at": notification.read_at,
+        }
+
+    @classmethod
+    def _safe_payload(cls, value):
+        if isinstance(value, dict):
+            return {
+                str(key): cls._safe_payload(item)
+                for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+                if not any(part in str(key).lower() for part in cls._PRIVATE_KEY_PARTS)
+            }
+        if isinstance(value, (list, tuple)):
+            return [cls._safe_payload(item) for item in value]
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        return str(value)
 
 
 class LeagueService:
@@ -521,7 +742,7 @@ class CompetitionService:
     ) -> CompetitionView:
         with self.store.transaction() as uow:
             LeagueService._membership(uow, actor_id, league_id)
-            competition = uow.competitions.get(competition_id)
+            competition = uow.competitions.get(competition_id, for_update=True)
             if not competition or competition.league_id != league_id:
                 raise NotFound("competición no encontrada")
             return self._view(competition)
@@ -584,6 +805,28 @@ class CompetitionService:
             competition.starts_at, competition.ends_at, competition.status,
             copy.deepcopy(competition.rules_snapshot), competition.started_at,
         )
+
+
+class DashboardService:
+    """Consulta privada de analítica; nunca expone importes de otro jugador."""
+
+    def __init__(self, store, market) -> None:
+        self.store = store
+        self.market = market
+
+    def get(
+        self, actor_id: str, league_id: str, competition_id: str, now: datetime,
+    ) -> dict[str, object]:
+        with self.store.transaction() as uow:
+            LeagueService._membership(uow, actor_id, league_id)
+            competition = uow.competitions.get(competition_id, for_update=True)
+            if not competition or competition.league_id != league_id:
+                raise NotFound("competición no encontrada")
+            if competition.status is CompetitionStatus.DRAFT:
+                return empty_dashboard(competition)
+            if not competition.rules_snapshot:
+                return empty_dashboard(competition)
+            return assemble_dashboard(uow, competition, self.market, now)
 
 
 class TradingService:
@@ -732,6 +975,10 @@ class TradingService:
                 order_id, normalized_symbol, requested_side, normalized_quantity,
                 OrderType.MARKET, session is Session.EXTENDED, occurred_at,
                 commission=commission,
+            )
+            self._validate_execution_sequence(
+                account, occurred_at, normalized_symbol, requested_side,
+                normalized_quantity, normalized_price, commission,
             )
             try:
                 self._engine(competition).record_reported(
@@ -905,12 +1152,39 @@ class TradingService:
             raise Conflict("la fecha queda fuera del calendario fijado")
         if occurred_at < account.joined_at:
             raise Conflict("la fecha precede a la incorporación del participante")
-        latest = max(
-            (item.executed_at for item in account.portfolio.executions),
-            default=None,
-        )
-        if latest is not None and occurred_at < latest:
-            raise Conflict("las operaciones deben registrarse cronológicamente")
+
+    @staticmethod
+    def _validate_execution_sequence(
+        account: TradingAccount, occurred_at: datetime, symbol: str,
+        side: OrderSide, amount: Decimal, execution_price: Decimal,
+        commission: Decimal,
+    ) -> None:
+        """Valida saldos a fecha de evento antes de aceptar un alta retroactiva."""
+        events = [
+            (item.executed_at, item.id, item.symbol, item.side, item.quantity,
+             item.price, item.commission, item.total_amount)
+            for item in account.portfolio.executions
+        ]
+        events.append((occurred_at, "~proposed", symbol, side, amount,
+                       execution_price, commission, None))
+        cash = account.portfolio.initial_cash
+        positions: dict[str, Decimal] = {}
+        for (_, _, event_symbol, event_side, event_amount, event_price, fee,
+             declared_total) in sorted(events):
+            gross = money(event_amount * event_price)
+            if event_side is OrderSide.BUY:
+                total = declared_total if declared_total is not None else money(gross + fee)
+                if cash < total:
+                    raise Conflict("saldo insuficiente en la fecha declarada")
+                cash = money(cash - total)
+                positions[event_symbol] = positions.get(event_symbol, Decimal("0")) + event_amount
+            else:
+                held = positions.get(event_symbol, Decimal("0"))
+                if held < event_amount:
+                    raise Conflict("posición insuficiente en la fecha declarada")
+                positions[event_symbol] = held - event_amount
+                total = declared_total if declared_total is not None else money(gross - fee)
+                cash = money(cash + total)
 
     @staticmethod
     def _engine(competition: Competition) -> TradingEngine:

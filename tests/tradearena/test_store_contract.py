@@ -16,7 +16,7 @@ from tradearena.adapters.market_data import FixtureMarketDataAdapter
 from tradearena.application.models import User
 from tradearena.application.services import (
     AccountService, CompetitionService, Forbidden, LeagueService,
-    PlanLimitExceeded, SessionService, TradingService,
+    NotificationService, PlanLimitExceeded, SessionService, TradingService,
 )
 from tradearena.domain.trading import Quote, Session
 from tradearena.migrations import migrate
@@ -101,6 +101,83 @@ def _exercise_application_contract(store):
     assert len(ranking.rows) == 2
     assert trading.ranking(owner.id, league.id, competition.id, quote_time) == ranking
 
+    notifications = NotificationService(store, lambda: str(uuid4()))
+    created_notification = notifications.create(
+        member.id, "trade.recorded", {
+            "competition_id": competition.id, "session_token": "must-not-leak",
+        }, quote_time,
+    )
+    assert notifications.list_for(member.id)[0]["payload"] == {
+        "competition_id": competition.id,
+    }
+    assert notifications.mark_read(
+        member.id, created_notification.id, quote_time,
+    )["read_at"] == quote_time
+    exported = accounts.export(member.id, member.id)
+    assert accounts.export(member.id, member.id) == exported
+    assert exported["schema_version"] == "1"
+    assert exported["financial_history"][0]["portfolio"]["executions"][0]["source"] \
+        .value == "reported"
+    assert "identity_subject" not in exported["user"]
+    assert "session_token" not in str(exported)
+
+
+def _exercise_account_deletion_contract(store):
+    accounts = AccountService(store, lambda: str(uuid4()))
+    sessions = SessionService(store, lambda: str(uuid4()), lambda: NOW)
+    leagues = LeagueService(store, lambda: str(uuid4()))
+    competitions = CompetitionService(store, lambda: str(uuid4()))
+    notifications = NotificationService(store, lambda: str(uuid4()))
+    user = accounts.login(
+        IdentityAssertion("email", "delete@example.com", "delete@example.com", True),
+        NOW,
+    )
+    inviter = accounts.login(
+        IdentityAssertion("email", "inviter@example.com", "inviter@example.com", True),
+        NOW,
+    )
+    accounts.set_profile(
+        user.id, "Personal Name", "es", NOW.date().replace(year=1990), NOW, NOW,
+    )
+    first_token = sessions.issue(user.id, NOW)
+    second_token = sessions.issue(user.id, NOW)
+    owned = leagues.create(user.id, "Owned", NOW)
+    competition = competitions.create(
+        user.id, owned.id, "History", NOW, NOW + timedelta(days=2), NOW,
+    )
+    competitions.start(user.id, owned.id, competition.id, NOW)
+    TradingService(store, lambda: str(uuid4()), FixtureMarketDataAdapter()).report_trade(
+        user.id, owned.id, competition.id, occurred_at=NOW,
+        symbol="AAPL", side="buy", quantity_value="1",
+        price_per_share="100", total_amount="101.15", currency="USD",
+        fx_rate="1", client_trade_id=str(uuid4()), now=NOW,
+    )
+    invited_league = leagues.create(inviter.id, "Invitation", NOW)
+    invitation = leagues.invite(inviter.id, invited_league.id, user.email, NOW)
+    notifications.create(user.id, "privacy.ready", {"message": "Ready"}, NOW)
+
+    with pytest.raises(Exception, match="confirmación"):
+        accounts.delete(user.id, user.id, NOW, confirmed=False)
+    accounts.delete(user.id, user.id, NOW, confirmed=True)
+
+    with pytest.raises(Forbidden):
+        sessions.authenticate(first_token)
+    with pytest.raises(Forbidden):
+        sessions.authenticate(second_token)
+    with store.transaction() as uow:
+        deleted = uow.users.get(user.id)
+        assert deleted.deleted_at == NOW
+        assert deleted.email == f"deleted+{user.id}@invalid.local"
+        assert uow.profiles.get(user.id) is None
+        assert all(item.removed_at == NOW for item in uow.memberships.list_for_user(user.id))
+        retained = uow.trading.list_for_user(user.id)
+        assert len(retained) == 1
+        assert retained[0].portfolio.executions
+        assert retained[0].portfolio.ledger
+        assert uow.audit.list_for_user(user.id)[-1].action == "account.deleted"
+        assert uow.notifications.list_for_user(user.id) == []
+        assert uow.invitations.get(invitation.id).email == deleted.email
+
 
 def test_memory_store_passes_application_contract_and_rolls_back():
     store = MemoryStore()
@@ -118,6 +195,10 @@ def test_memory_store_passes_application_contract_and_rolls_back():
         assert uow.users.get(user_id) is None
 
 
+def test_memory_store_preserves_and_anonymizes_account_deletion_contract():
+    _exercise_account_deletion_contract(MemoryStore())
+
+
 @pytest.fixture
 def postgres_store():
     if not TEST_DATABASE_URL:
@@ -132,6 +213,8 @@ def postgres_store():
             "004_competitions", "005_trading_ranking",
             "006_fractional_reported_trades", "007_user_commissions",
             "008_initial_participant_calendar_join",
+            "009_notifications_privacy",
+            "010_competition_dashboard",
         ]
         assert migrate(dsn) == []
         yield PostgresStore(dsn)
@@ -144,6 +227,39 @@ def postgres_store():
 
 def test_postgres_store_passes_same_application_contract(postgres_store):
     _exercise_application_contract(postgres_store)
+
+
+def test_dashboard_migration_upgrades_version_009(postgres_store, tmp_path):
+    schema = f"tradearena_009_{uuid4().hex}"
+    with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
+    previous_dsn = make_conninfo(postgres_store.dsn, options=f"-c search_path={schema}")
+    previous_migrations = tmp_path / "version-009"
+    previous_migrations.mkdir()
+    source = Path(__file__).parents[2] / "migrations"
+    for version in range(1, 10):
+        path = next(source.glob(f"{version:03d}_*.sql"))
+        (previous_migrations / path.name).write_text(path.read_text())
+    try:
+        assert migrate(previous_dsn, previous_migrations)[-1] == "009_notifications_privacy"
+        assert migrate(previous_dsn) == ["010_competition_dashboard"]
+        with psycopg.connect(previous_dsn, row_factory=psycopg.rows.dict_row) as connection:
+            columns = {row["column_name"] for row in connection.execute(
+                """SELECT column_name FROM information_schema.columns
+                     WHERE table_schema = current_schema()
+                       AND table_name = 'portfolio_snapshots'"""
+            ).fetchall()}
+            assert {"trading_day", "provisional", "calculation_version"} <= columns
+            assert connection.execute("SELECT to_regclass('competition_badges') AS value").fetchone()["value"]
+    finally:
+        with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
+            admin.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))
+
+
+def test_postgres_store_preserves_and_anonymizes_account_deletion_contract(
+    postgres_store,
+):
+    _exercise_account_deletion_contract(postgres_store)
 
 
 def test_postgres_auth0_identity_and_individual_session_revocation(postgres_store):
@@ -177,6 +293,8 @@ def test_auth0_migration_upgrades_the_previous_schema(postgres_store, tmp_path):
             "005_trading_ranking", "006_fractional_reported_trades",
             "007_user_commissions",
             "008_initial_participant_calendar_join",
+            "009_notifications_privacy",
+            "010_competition_dashboard",
         ]
         assert migrate(previous_dsn) == []
     finally:
@@ -204,6 +322,8 @@ def test_trading_migration_upgrades_ta034_schema(postgres_store, tmp_path):
             "005_trading_ranking", "006_fractional_reported_trades",
             "007_user_commissions",
             "008_initial_participant_calendar_join",
+            "009_notifications_privacy",
+            "010_competition_dashboard",
         ]
     finally:
         with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
@@ -229,6 +349,8 @@ def test_fractional_reported_migration_upgrades_ta035_schema(postgres_store, tmp
         assert migrate(previous_dsn) == [
             "006_fractional_reported_trades", "007_user_commissions",
             "008_initial_participant_calendar_join",
+            "009_notifications_privacy",
+            "010_competition_dashboard",
         ]
         with psycopg.connect(previous_dsn, row_factory=psycopg.rows.dict_row) as connection:
             columns = connection.execute(
@@ -248,6 +370,42 @@ def test_fractional_reported_migration_upgrades_ta035_schema(postgres_store, tmp
         commission = next(row for row in columns if row["column_name"] == "commission")
         assert commission["data_type"] == "numeric"
         assert commission["numeric_scale"] == 2
+    finally:
+        with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
+            admin.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))
+
+
+def test_notifications_privacy_migration_upgrades_008_schema(postgres_store, tmp_path):
+    schema = f"tradearena_008_{uuid4().hex}"
+    with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
+    previous_dsn = make_conninfo(postgres_store.dsn, options=f"-c search_path={schema}")
+    previous_migrations = tmp_path / "migrations-008"
+    previous_migrations.mkdir()
+    source = Path(__file__).parents[2] / "migrations"
+    for version in range(1, 9):
+        path = next(source.glob(f"{version:03d}_*.sql"))
+        (previous_migrations / path.name).write_text(path.read_text())
+    try:
+        assert migrate(previous_dsn, previous_migrations)[-1] \
+            == "008_initial_participant_calendar_join"
+        assert migrate(previous_dsn) == [
+            "009_notifications_privacy", "010_competition_dashboard",
+        ]
+        with psycopg.connect(previous_dsn) as connection:
+            indexes = {row[0] for row in connection.execute(
+                """
+                SELECT indexname FROM pg_indexes
+                 WHERE schemaname = current_schema()
+                   AND indexname IN (
+                       'notifications_by_user_created',
+                       'access_audit_by_actor_sequence'
+                   )
+                """
+            ).fetchall()}
+        assert indexes == {
+            "notifications_by_user_created", "access_audit_by_actor_sequence",
+        }
     finally:
         with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
             admin.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))
