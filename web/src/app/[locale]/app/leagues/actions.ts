@@ -26,6 +26,10 @@ function leaguePath(locale: Locale, leagueId: string) {
   return `/${locale}/app/leagues/${encodeURIComponent(leagueId)}`;
 }
 
+function competitionPath(locale: Locale, leagueId: string, competitionId: string) {
+  return `${leaguePath(locale, leagueId)}/competitions/${encodeURIComponent(competitionId)}`;
+}
+
 export async function createLeague(formData: FormData) {
   const locale = localeFrom(formData);
   const response = await apiFetch("/api/v1/leagues", {
@@ -154,7 +158,7 @@ export async function submitOrder(formData: FormData) {
   const locale = localeFrom(formData);
   const leagueId = reference(formData, "league_id");
   const competitionId = reference(formData, "competition_id");
-  const destination = leaguePath(locale, leagueId);
+  const destination = competitionPath(locale, leagueId, competitionId);
   const symbol = String(formData.get("symbol") ?? "").trim().toUpperCase();
   const side = String(formData.get("side") ?? "");
   const orderType = String(formData.get("order_type") ?? "");
@@ -192,7 +196,7 @@ export async function reportTrade(formData: FormData) {
   const locale = localeFrom(formData);
   const leagueId = reference(formData, "league_id");
   const competitionId = reference(formData, "competition_id");
-  const destination = leaguePath(locale, leagueId);
+  const destination = competitionPath(locale, leagueId, competitionId);
   const date = String(formData.get("date") ?? "");
   const timezone = String(formData.get("timezone") ?? "Europe/Madrid");
   const ticker = String(formData.get("ticker") ?? "").trim().toUpperCase();
@@ -236,7 +240,7 @@ export async function correctReportedTrade(formData: FormData) {
   const leagueId = reference(formData, "league_id");
   const competitionId = reference(formData, "competition_id");
   const executionId = reference(formData, "execution_id");
-  const destination = leaguePath(locale, leagueId);
+  const destination = competitionPath(locale, leagueId, competitionId);
   const response = await apiFetch(
     `/api/v1/leagues/${leagueId}/competitions/${competitionId}/reported-trades/${executionId}/corrections`,
     {
@@ -258,7 +262,7 @@ export async function cancelOrder(formData: FormData) {
   const leagueId = reference(formData, "league_id");
   const competitionId = reference(formData, "competition_id");
   const orderId = reference(formData, "order_id");
-  const destination = leaguePath(locale, leagueId);
+  const destination = competitionPath(locale, leagueId, competitionId);
   const response = await apiFetch(
     `/api/v1/leagues/${leagueId}/competitions/${competitionId}/orders/${orderId}`,
     {method: "DELETE"}

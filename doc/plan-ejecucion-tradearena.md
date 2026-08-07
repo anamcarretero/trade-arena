@@ -171,8 +171,8 @@ reproducibles en memoria y PostgreSQL 16.
 3. Validar en backend que la liga, competición y cartera pertenecen a la
    sesión; que la competición está activa; que la fecha no es futura, está
    dentro del calendario inmutable y no precede a la incorporación del
-   participante; y que los registros se introducen cronológicamente respecto
-   al último evento de la cartera.
+   participante. Desde TA-037 se admite un alta retroactiva tras revalidar saldo
+   y posición al reproducir todos los eventos en orden histórico.
 4. En v1 exigir `Currency = USD` y `FX Rate = 1`. Admitir una comisión opcional
    tanto en órdenes como en operaciones declaradas. Una orden sin comisión usa
    al ejecutarse el respaldo del snapshot. En una declaración sin comisión,
@@ -205,18 +205,58 @@ Quedan fuera la importación CSV, sincronización con brokers, operaciones reale
 multidivisa, edición destructiva, mercado licenciado, jobs y conciliación
 bancaria.
 
-### Fase 3.5 — TA-036–TA-037: cierre funcional y accesibilidad de la PWA
+### Fase 3.5 — TA-036–TA-038: cierre funcional, dashboard y accesibilidad
 
 1. TA-036, completado: incorporar el centro privado de notificaciones y los
    flujos de exportación completa y borrado confirmado, con autorización,
    anonimización, revocación de sesiones y conservación financiera en Python.
-2. TA-037: completar accesibilidad WCAG 2.2 AA y E2E de dos participantes sobre los
-   recorridos críticos.
+2. TA-037: incorporar el dashboard privado completo de competición descrito a
+   continuación.
+3. TA-038: completar accesibilidad WCAG 2.2 AA y E2E de dos participantes sobre
+   los recorridos críticos.
 
 **Salida:** la PWA cubre los flujos previstos para beta y supera la validación
 de accesibilidad y los recorridos E2E antes del despliegue integrado.
 
-### Fase 3.6 — TA-038: infraestructura y entrega continua
+#### TA-037 — Dashboard completo de competición
+
+1. Proyectar cada cartera por jornada real XNYS desde `joined_at`, usando el
+   cierre regular canónico y un único punto provisional para la sesión actual.
+   Una cotización ausente produce estado `incomplete`; nunca se arrastra un
+   precio ni se presenta una rentabilidad parcial como definitiva.
+2. Reproducir compras, ventas, comisiones y compensaciones desde las
+   ejecuciones auditables. Los puntos derivados afectados por una operación
+   retroactiva se sustituyen desde su fecha, sin editar ledger ni ejecuciones.
+3. Persistir cierres y provisionales idempotentes en `portfolio_snapshots` y
+   `ranking_snapshots`, con estado reproducible, versión y digest. Conservar
+   badges concedidos con unicidad por competición, participante y logro.
+4. Publicar líder, gap, series acumuladas/diarias, ganadores diarios y
+   mensuales, estadísticas, portfolios porcentuales con `CASH`, ocho operaciones
+   saneadas, badges e insights deterministas de liga.
+5. Exponer `GET /api/v1/leagues/{league_id}/competitions/{competition_id}/dashboard`
+   con estados `complete`, `provisional`, `incomplete` y `empty`, ISO 8601,
+   decimales como cadenas, orden estable y `404` para recursos ajenos.
+6. Crear `/{locale}/app/leagues/{leagueId}/competitions/{competitionId}` con
+   gráficas React/SVG propias, fichas desplegables de jugador y jornada,
+   resultados y el panel monetario privado de la cartera propia. El detalle de
+   liga conserva tarjetas-resumen enlazables, no todos los paneles de trading.
+7. Para otros participantes solo se comparten nombres, retornos, posiciones,
+   pesos, rachas, badges y metadatos saneados de operaciones. No se publican
+   cantidades, precios, totales, comisiones, efectivo absoluto, equity, ledger,
+   órdenes ni claves idempotentes.
+
+Quedan expresamente fuera de TA-037 la importación CSV/PDF, la lectura de
+`players/`, `data/public/` o cifrados del legado, brokers, Yahoo Finance,
+recomendaciones personalizadas y cualquier modelo generativo o llamada a IA.
+
+**Aceptación TA-037:** series iniciales/mensuales, empates, gaps, incorporación
+tardía, expulsión/anonimización, comisiones, compensaciones, invalidación,
+ausencias de mercado, digest/idempotencia, badges e insights deterministas;
+contrato equivalente en memoria/PostgreSQL, migración vacía y desde 009,
+privacidad estructural, OpenAPI/TypeScript sincronizados, render ES/EN,
+navegación y E2E de dos participantes y competición terminada.
+
+### Fase 3.6 — TA-039: infraestructura y entrega continua
 
 1. Definir como código Artifact Registry, Cloud Run, Scheduler, IAM, Secret
    Manager, Neon y la configuración necesaria de Vercel.
@@ -236,7 +276,9 @@ rollback; producción continúa cerrada.
 
 ### Fase 4 — Mercado y trabajos en segundo plano
 
-1. Mantener fixtures durante desarrollo. Yahoo no se usa en TradeArena nuevo.
+1. Mantener fixtures para pruebas deterministas. Yahoo puede usarse de forma
+   temporal solo en desarrollo local, desacoplado mediante `MarketDataPort`;
+   nunca como proveedor de un despliegue público ni como respaldo de producción.
 2. Integrar Massive únicamente después de confirmar por escrito la licencia
    de visualización y retraso uniforme.
 3. Añadir outbox PostgreSQL y jobs separados para precios/calendario,
@@ -245,6 +287,11 @@ rollback; producción continúa cerrada.
    limitados, métricas y auditoría.
 5. Ante datos ausentes, dejar la orden pendiente y no fabricar precios ni
    snapshots.
+6. Añadir enriquecimiento de ticker, precios históricos, nombres/dominios
+   curados, noticias no sensibles y el récord de mayor subida diaria solo con
+   proveedor y licencia confirmados. El consenso y los precios objetivo serán
+   neutrales y se omitirán ante fallo o licencia insuficiente; nunca se usará
+   Yahoo como respaldo ni se generarán recomendaciones de compra o venta.
 
 **Salida:** una interrupción o repetición no pierde trabajo ni duplica
 ejecuciones, apuntes o snapshots.
@@ -271,12 +318,15 @@ ejecuciones, apuntes o snapshots.
 - Pruebas unitarias deterministas de dinero, órdenes, ledger, eventos y ranking.
 - Pruebas de cantidades fraccionadas hasta ocho decimales, redondeo monetario y
   ejecución completa sin rellenos parciales.
-- Pruebas de ejecuciones registradas manualmente: fecha y orden cronológico,
+- Pruebas de ejecuciones registradas manualmente: fecha y reproducción cronológica,
   USD/FX, coherencia del total, saldo/posición, origen, compensación e
   idempotencia por cartera.
 - Mismas pruebas de contrato para memoria y PostgreSQL.
 - Integración con PostgreSQL real, concurrencia de límites Free y rollback.
 - Validación de OpenAPI y del cliente TypeScript generado.
+- TA-037 verifica estados completo, provisional, incompleto y vacío, series
+  XNYS, snapshots/badges idempotentes, operaciones saneadas, contrato sin
+  importes ajenos y dashboard responsive ES/EN.
 - E2E de acceso, invitación, competición, orden, ejecución y ranking con dos
   participantes.
 - Pruebas negativas de autorización, edad, sesión revocada, invitación ajena,
@@ -314,10 +364,11 @@ Secuencia recomendada:
 4. TA-033, página pública de planes;
 5. TA-034–TA-035, competiciones, cartera y ranking;
 6. ampliación TA-035, fracciones y ejecuciones registradas manualmente;
-7. TA-036 completado; TA-037, accesibilidad de la PWA;
-8. TA-038, infraestructura y staging;
-9. mercado y jobs;
-10. Stripe y preparación de beta.
+7. TA-036 completado; TA-037, dashboard completo de competición;
+8. TA-038, accesibilidad de la PWA;
+9. TA-039, infraestructura y staging;
+10. mercado y jobs;
+11. Stripe y preparación de beta.
 
 Cada `/goal` debe expresar resultado, límites y verificación, y referenciar
 este documento en vez de copiar toda la especificación. TA-032 conserva los

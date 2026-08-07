@@ -3,7 +3,7 @@ import {notFound, redirect} from "next/navigation";
 import {CopyInvitationLink} from "@/components/copy-invitation-link";
 import {LocaleSwitcher} from "@/components/locale-switcher";
 import {CompetitionSection} from "@/components/competition-section";
-import {competitionPortfolio, competitionRanking, leagueCompetitions, leagueDetail, ownAccount} from "@/lib/api";
+import {competitionDashboard, leagueCompetitions, leagueDetail, ownAccount} from "@/lib/api";
 import {copy, isLocale} from "@/lib/i18n";
 import {invitationPath} from "@/lib/invitations";
 import {canManageLeague, occupiedSeats} from "@/lib/league-state";
@@ -26,14 +26,10 @@ export default async function LeaguePage({params, searchParams}: {
   if (!competitions) return <AccessDenied locale={rawLocale} message={text.leagueAccessError}/>;
   const state = await searchParams;
   const manager = canManageLeague(league);
-  const trading = Object.fromEntries((await Promise.all(competitions
-    .filter(competition => competition.status !== "draft")
+  const dashboards = Object.fromEntries((await Promise.all(competitions
     .map(async competition => {
-      const [portfolio, ranking] = await Promise.all([
-        competitionPortfolio(leagueId, competition.id),
-        competitionRanking(leagueId, competition.id)
-      ]);
-      return portfolio && ranking ? [competition.id, {portfolio, ranking}] as const : null;
+      const dashboard = await competitionDashboard(leagueId, competition.id);
+      return dashboard ? [competition.id, dashboard] as const : null;
     }))).filter(entry => entry !== null));
   const occupied = occupiedSeats(league);
   const emptySeats = Math.max(0, league.max_members - occupied);
@@ -76,7 +72,7 @@ export default async function LeaguePage({params, searchParams}: {
       </div>
     </section>
 
-    <CompetitionSection locale={rawLocale} leagueId={league.id} competitions={competitions} manager={manager} trading={trading}/>
+    <CompetitionSection locale={rawLocale} leagueId={league.id} competitions={competitions} manager={manager} dashboards={dashboards}/>
 
     {manager && <section className="league-admin-grid">
       <div className="admin-panel">

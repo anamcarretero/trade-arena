@@ -218,5 +218,41 @@ createServer(async (request, response) => {
       ].sort((a, b) => a.rank - b.rank)
     });
   }
+  const dashboardRoute = path.match(/^\/api\/v1\/leagues\/league-e2e\/competitions\/([^/]+)\/dashboard$/);
+  if (request.method === "GET" && dashboardRoute) {
+    const competition = competitions.find(item => item.id === dashboardRoute[1]);
+    if (!competition) return json(response, 404, {error: "not_found"});
+    if (competition.status === "draft") return json(response, 200, {
+      competition: {id: competition.id, league_id: league.id, name: competition.name, status: "draft", starts_at: competition.starts_at, ends_at: competition.ends_at, market_calendar: "XNYS", updated_at: null},
+      data_status: "empty", players: [], summary: {leader: null, best_day: null, gap: "0"},
+      monthly: {current: null, previous: null}, daily_winners: [], daily_results: [],
+      league_allocation: [], recent_trades: [], badges: [], insights: [], missing_data: [], ticker_record: null
+    });
+    const portfolio = portfolios.get(competition.id);
+    const ownerReturn = portfolio?.cumulative_return ?? "0";
+    const point = (playerReturn) => ({date: "2026-09-03", as_of: "2026-09-03T20:00:00Z", provisional: false, daily_return: playerReturn, cumulative_return: playerReturn, complete: true});
+    const allocation = [{symbol: "CASH", weight: "0.65"}, {symbol: "AAPL", weight: "0.35"}];
+    const players = [
+      {id: "member-e2e", display_name: "Member E2E", rank: ownerReturn.startsWith("-") ? 1 : 2, active: true, joined_at: "2026-09-02T12:00:00Z", joined_late: true, as_of: "2026-09-03T20:00:00Z", cumulative_return: "0.010000000000", statistics: {best_daily_return: "0.01", worst_daily_return: "0.01", current_streak: 1, sessions: 1}, series: [point("0.01")], allocation, badges: []},
+      {id: "owner-e2e", display_name: "Owner E2E", rank: ownerReturn.startsWith("-") ? 2 : 1, active: true, joined_at: "2026-09-01T00:00:00Z", joined_late: false, as_of: "2026-09-03T20:00:00Z", cumulative_return: ownerReturn, statistics: {best_daily_return: ownerReturn, worst_daily_return: ownerReturn, current_streak: Number(ownerReturn) >= 0 ? 1 : -1, sessions: 1}, series: [point(ownerReturn)], allocation, badges: []}
+    ].sort((a, b) => a.rank - b.rank);
+    const leader = players[0];
+    const recentTrades = (portfolio?.executions ?? []).slice(-8).reverse().map(execution => ({
+      player_id: "owner-e2e", display_name: "Owner E2E", executed_at: execution.executed_at,
+      symbol: execution.symbol, type: execution.correction_of ? "correction" : execution.side,
+      source: execution.source
+    }));
+    return json(response, 200, {
+      competition: {id: competition.id, league_id: league.id, name: competition.name, status: "active", starts_at: competition.starts_at, ends_at: competition.ends_at, market_calendar: "XNYS", updated_at: "2026-09-03T20:00:00Z"},
+      data_status: "complete", players,
+      summary: {leader: {player_id: leader.id, display_name: leader.display_name, cumulative_return: leader.cumulative_return}, best_day: {date: "2026-09-03", player_ids: [leader.id], return: leader.cumulative_return, provisional: false}, gap: String(Math.abs(Number(players[0].cumulative_return) - Number(players[1].cumulative_return)))},
+      monthly: {current: {month: "2026-09", winner: {player_id: leader.id, return: leader.cumulative_return}, series: players.map(player => ({player_id: player.id, display_name: player.display_name, points: [{date: "2026-09-03", return: player.cumulative_return}]}))}, previous: {month: "2026-08", winner: null, series: []}},
+      daily_winners: [{date: "2026-09-03", player_ids: [leader.id], return: leader.cumulative_return, provisional: false}],
+      daily_results: [{date: "2026-09-03", provisional: false, players: players.map(player => ({player_id: player.id, display_name: player.display_name, daily_return: player.cumulative_return, cumulative_return: player.cumulative_return, complete: true}))}],
+      league_allocation: allocation, recent_trades: recentTrades,
+      badges: [], insights: [{kind: "leader", player_id: leader.id, value: leader.cumulative_return}],
+      missing_data: [], ticker_record: null
+    });
+  }
   return json(response, 404, {error: "not_found"});
 }).listen(18080, "127.0.0.1");

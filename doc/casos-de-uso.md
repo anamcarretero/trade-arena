@@ -14,7 +14,7 @@ añaden participante autenticado, propietario y administrador de liga. Sus
 recursos son privados y solo se exponen por `/api/v1` tras validar sesión y
 membresía activa.
 
-## 0. Flujos del producto nuevo hasta TA-036
+## 0. Flujos del producto nuevo hasta TA-037
 
 1. Identidad verifica un enlace de email de un solo uso o claims Google con
    emisor, audiencia y email verificado; después se emite una sesión propia.
@@ -161,8 +161,9 @@ TA-035; notificaciones, exportación, borrado y facturación siguen diferidos.
    antes de aplicar las reglas financieras.
 2. FastAPI vuelve a autenticar y Python oculta con `404` ligas, competiciones,
    carteras u operaciones ajenas. La competición debe estar activa; la fecha no
-   puede ser futura, queda dentro del calendario fijado, no precede a la
-   incorporación y no retrocede respecto a la última ejecución de la cartera.
+   puede ser futura, queda dentro del calendario fijado y no precede a la
+   incorporación. TA-037 admite altas retroactivas: Python reproduce los
+   eventos y vuelve a validar saldo y posición en la fecha declarada.
 3. Si la comisión queda vacía, la PWA sugiere en su campo la diferencia entre
    bruto y total. El backend vuelve a calcularla con `Decimal`: en compra es
    total menos cantidad × precio y en venta es cantidad × precio menos total.
@@ -213,8 +214,47 @@ facturación, Stripe, mercado licenciado, jobs programados ni staging.
    órdenes, operaciones o notificaciones. Los recursos privados ajenos siguen
    respondiendo `404`.
 
-TA-036 no incorpora el trabajo general WCAG 2.2 AA de TA-037, infraestructura
+TA-036 no incorpora el trabajo general WCAG 2.2 AA de TA-038, infraestructura
 cloud, mercado licenciado, jobs, brokers, Friends, Club, Stripe ni facturación.
+
+### Dashboard de competición de TA-037
+
+1. Un miembro abre una tarjeta de competición y navega a su detalle. FastAPI
+   vuelve a comprobar sesión, membresía activa, liga y pertenencia de la
+   competición; cualquier combinación ajena responde `404`. Un borrador devuelve
+   identidad y `data_status=empty` sin crear cartera ni snapshot.
+2. Para cada participante se generan jornadas reales XNYS desde `joined_at`.
+   Los cierres usan las 16:00 de Nueva York y la sesión actual puede aparecer
+   provisional. Fin de semana y festivo no crean puntos.
+3. La proyección reproduce ejecuciones, comisiones y movimientos
+   compensatorios. Una cotización ausente no se rellena: la jornada permanece
+   visible pero incompleta y ningún retorno parcial se etiqueta como definitivo.
+4. La pantalla presenta líder, gap, series acumuladas, mejor jornada, ganadores
+   mensuales/diarios, resultados, estadísticas, rachas, badges, portfolios en
+   pesos con `CASH`, ocho operaciones saneadas e insights deterministas. Un
+   jugador o una jornada se despliega para mostrar su detalle porcentual.
+5. Los expulsados dejan de participar en la clasificación viva y conservan su
+   historia. Una cuenta eliminada aparece como participante anónimo. Los
+   empates se ordenan de manera estable por `user_id`.
+6. De otros jugadores se ven nombre, porcentajes, ticker, compra/venta o
+   corrección, origen, fechas, estadísticas y badges. Nunca se ven cantidades,
+   precio, total, comisión, efectivo/equity absolutos, ledger, órdenes o claves
+   idempotentes. La sección «Mi cartera y operaciones» mantiene los importes
+   propios y los formularios ya autorizados.
+7. Registrar o compensar una operación revalida el detalle y reconstruye los
+   puntos derivados. No modifica ni elimina la ejecución o el ledger original.
+8. Los «Insights de liga» son reglas locales estables sobre liderazgo,
+   distancia, jornadas y rachas. No se presentan como IA, no envían portfolios
+   a terceros y no contienen consejos ni predicciones.
+
+TA-037 no importa CSV/PDF, no consulta el ranking histórico ni sus datos
+cifrados y no sincroniza brokers. En desarrollo local se puede activar Yahoo
+con `MARKET_DATA_PROVIDER=yahoo`: se consulta una ventana de cierres por
+símbolo a través de `MarketDataPort`, y cualquier fallo deja las jornadas
+afectadas incompletas. Esta configuración no se utiliza en despliegues públicos.
+Las fichas enriquecidas de
+ticker, históricos, consenso neutral y récord de activo esperan a la Fase 4 y a
+una licencia confirmada.
 
 Para ejecutar el backend contra PostgreSQL se aplican primero las migraciones
 con `DATABASE_URL=... python3 -m tradearena migrate` y se arranca después la API

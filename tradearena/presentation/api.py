@@ -51,7 +51,7 @@ class Api:
     def __init__(
         self, sessions, accounts, leagues, clock: Callable[[], datetime],
         auth=None, bff_shared_secret: str | None = None, competitions=None,
-        trading=None, notifications=None,
+        trading=None, notifications=None, dashboard=None,
     ) -> None:
         self.sessions = sessions
         self.accounts = accounts
@@ -62,6 +62,7 @@ class Api:
         self.competitions = competitions
         self.trading = trading
         self.notifications = notifications
+        self.dashboard = dashboard
 
     def handle(
         self, method: str, path: str, token: str | None = None,
@@ -221,6 +222,14 @@ class Api:
                     and method == "GET":
                 result = self.trading.ranking(actor, route[1], route[3], now)
                 return ApiResponse(200, _json(asdict(result)))
+            if len(route) == 5 and route[0] == "leagues" \
+                    and route[2] == "competitions" and route[4] == "dashboard" \
+                    and method == "GET":
+                if self.dashboard is None:
+                    return ApiResponse(404, {"error": "not_found"})
+                return ApiResponse(200, _json(
+                    self.dashboard.get(actor, route[1], route[3], now)
+                ))
             if len(route) == 3 and route[0] == "leagues" \
                     and route[2] == "invitations" and method == "POST":
                 invitation = self.leagues.invite(

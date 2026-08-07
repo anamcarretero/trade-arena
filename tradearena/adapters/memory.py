@@ -11,6 +11,9 @@ from tradearena.application.models import (
     AuditEvent, Competition, Invitation, InvitationStatus, League, Membership,
     Notification, Profile, TradingAccount, User,
 )
+from tradearena.application.dashboard import (
+    CompetitionBadge, PortfolioProjection, RankingProjection,
+)
 from tradearena.domain.ranking import RankingSnapshot
 
 
@@ -296,6 +299,31 @@ class MemoryTrading:
                  if candidate == competition_id]
         return copy.deepcopy(max(items, key=lambda item: item.as_of)) if items else None
 
+    def save_portfolio_projection(self, snapshot: PortfolioProjection) -> None:
+        key = (snapshot.portfolio_id, snapshot.trading_day, snapshot.provisional)
+        self.store._portfolio_projections[key] = copy.deepcopy(snapshot)
+
+    def list_portfolio_projections(self, portfolio_id: str) -> list[PortfolioProjection]:
+        return sorted((copy.deepcopy(item) for key, item in self.store._portfolio_projections.items()
+                       if key[0] == portfolio_id), key=lambda item: (item.trading_day, item.provisional))
+
+    def save_ranking_projection(self, snapshot: RankingProjection) -> None:
+        key = (snapshot.competition_id, snapshot.trading_day, snapshot.provisional)
+        self.store._ranking_projections[key] = copy.deepcopy(snapshot)
+
+    def list_ranking_projections(self, competition_id: str) -> list[RankingProjection]:
+        return sorted((copy.deepcopy(item) for key, item in self.store._ranking_projections.items()
+                       if key[0] == competition_id), key=lambda item: (item.trading_day, item.provisional))
+
+    def save_badge(self, badge: CompetitionBadge, created_at: datetime) -> None:
+        key = (badge.competition_id, badge.user_id, badge.key)
+        self.store._competition_badges.setdefault(key, copy.deepcopy(badge))
+
+    def list_badges(self, competition_id: str) -> list[CompetitionBadge]:
+        return sorted((copy.deepcopy(item) for key, item in self.store._competition_badges.items()
+                       if key[0] == competition_id),
+                      key=lambda item: (item.achieved_on, item.user_id, item.key))
+
 
 class MemoryAudit:
     def __init__(self, store: "MemoryStore") -> None:
@@ -363,6 +391,9 @@ class MemoryStore:
         self._competitions: dict[str, Competition] = {}
         self._trading: dict[tuple[str, str], TradingAccount] = {}
         self._rankings: dict[tuple[str, datetime], RankingSnapshot] = {}
+        self._portfolio_projections: dict[tuple, PortfolioProjection] = {}
+        self._ranking_projections: dict[tuple, RankingProjection] = {}
+        self._competition_badges: dict[tuple, CompetitionBadge] = {}
         self._sessions: dict[str, tuple[str, datetime]] = {}
         self._audit: list[AuditEvent] = []
         self._notifications: dict[str, Notification] = {}
@@ -385,6 +416,8 @@ class MemoryStore:
                 "_users", "_users_by_identity", "_users_by_email", "_profiles",
                 "_leagues", "_memberships", "_invitations", "_sessions", "_audit",
                 "_competitions", "_trading", "_rankings", "_notifications",
+                "_portfolio_projections", "_ranking_projections",
+                "_competition_badges",
             )
             state = copy.deepcopy({name: getattr(self, name) for name in names})
             try:

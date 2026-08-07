@@ -349,6 +349,20 @@ def create_app(api: Api, readiness: Callable[[], bool] | None = None) -> FastAPI
             token,
         ))
 
+    @app.get(
+        "/api/v1/leagues/{league_id}/competitions/{competition_id}/dashboard",
+        operation_id="getCompetitionDashboard",
+    )
+    def get_competition_dashboard(
+        league_id: str, competition_id: str,
+        token: str | None = Depends(_token),
+    ):
+        return _response(api.handle(
+            "GET",
+            f"/api/v1/leagues/{league_id}/competitions/{competition_id}/dashboard",
+            token,
+        ))
+
     @app.post(
         "/api/v1/leagues/{league_id}/invitations",
         operation_id="inviteLeagueMember",

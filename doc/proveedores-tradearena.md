@@ -7,7 +7,7 @@ contrato firmado que permita mostrar datos a usuarios finales.
 | Responsabilidad | Selección | Puerto y condición |
 |---|---|---|
 | Identidad | Auth0 EU, email sin contraseña y Google OIDC | `IdentityPort`; Apple se añadirá con el mismo `IdentityAssertion`. El adaptador local HMAC sirve solo desarrollo. |
-| Mercado | Massive Stocks Business con el *feed* licenciado que autorice display y retraso uniforme | `MarketDataPort` en Fase 4. No se usarán planes personales ni Yahoo en el producto nuevo. Go-live bloqueado hasta confirmación escrita de redistribución, mercados, sesiones y usuarios no profesionales. |
+| Mercado | Massive Stocks Business con el *feed* licenciado que autorice display y retraso uniforme | `MarketDataPort` en Fase 4. Yahoo se admite únicamente como adaptador temporal de desarrollo local; no se usarán planes personales ni Yahoo en el producto desplegado. Go-live bloqueado hasta confirmación escrita de redistribución, mercados, sesiones y usuarios no profesionales. |
 | Facturación | Stripe Billing y Customer Portal | `BillingPort` en Fase 5; los derechos derivarán de webhooks firmados e idempotentes, nunca del cliente. |
 | Interfaz | Vercel | Next.js/PWA y previews por rama. El BFF conserva la sesión; no se conecta desde el navegador a PostgreSQL. |
 | PostgreSQL | Neon, AWS Frankfurt (`aws-eu-central-1`) | Fuente de verdad para staging/producción. Ramas efímeras solo en CI para PR con backend o migraciones; recuperación probada antes de beta. |

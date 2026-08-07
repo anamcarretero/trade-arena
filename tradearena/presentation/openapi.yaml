@@ -286,7 +286,7 @@ paths:
               schema: {$ref: "#/components/schemas/Portfolio"}
         "400": {description: Campos, precisión, USD/FX, total o comisión inválidos}
         "404": {description: Liga, competición o cartera no accesible}
-        "409": {description: Fecha, cronología, saldo, posición o idempotencia en conflicto}
+        "409": {description: Fecha, saldo o posición históricos, o idempotencia en conflicto}
   /api/v1/leagues/{league_id}/competitions/{competition_id}/reported-trades/{execution_id}/corrections:
     post:
       operationId: correctReportedCompetitionTrade
@@ -341,6 +341,19 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Ranking"}
+        "404": {description: Liga o competición no accesible}
+  /api/v1/leagues/{league_id}/competitions/{competition_id}/dashboard:
+    get:
+      operationId: getCompetitionDashboard
+      parameters:
+        - {$ref: "#/components/parameters/LeagueId"}
+        - {$ref: "#/components/parameters/CompetitionId"}
+      responses:
+        "200":
+          description: Analítica porcentual saneada de la competición
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/CompetitionDashboard"}
         "404": {description: Liga o competición no accesible}
   /api/v1/leagues/{league_id}/invitations:
     post:
@@ -651,6 +664,70 @@ components:
         as_of: {type: string, format: date-time}
         rows: {type: array, items: {$ref: "#/components/schemas/RankingRow"}}
         digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+    DashboardAllocation:
+      type: object
+      additionalProperties: false
+      required: [symbol, weight]
+      properties:
+        symbol: {type: string}
+        weight: {type: string, description: Fracción decimal entre cero y uno}
+    DashboardSeriesPoint:
+      type: object
+      additionalProperties: false
+      required: [date, as_of, provisional, daily_return, cumulative_return, complete]
+      properties:
+        date: {type: string, format: date}
+        as_of: {type: string, format: date-time}
+        provisional: {type: boolean}
+        daily_return: {oneOf: [{type: string}, {type: "null"}]}
+        cumulative_return: {oneOf: [{type: string}, {type: "null"}]}
+        complete: {type: boolean}
+    DashboardPlayer:
+      type: object
+      additionalProperties: false
+      required: [id, display_name, rank, active, joined_at, joined_late, as_of, cumulative_return, statistics, series, allocation, badges]
+      properties:
+        id: {type: string}
+        display_name: {type: string}
+        rank: {oneOf: [{type: integer, minimum: 1}, {type: "null"}]}
+        active: {type: boolean}
+        joined_at: {type: string, format: date-time}
+        joined_late: {type: boolean}
+        as_of: {oneOf: [{type: string, format: date-time}, {type: "null"}]}
+        cumulative_return: {oneOf: [{type: string}, {type: "null"}]}
+        statistics: {type: object, additionalProperties: true}
+        series: {type: array, items: {$ref: "#/components/schemas/DashboardSeriesPoint"}}
+        allocation: {type: array, items: {$ref: "#/components/schemas/DashboardAllocation"}}
+        badges: {type: array, items: {type: object, additionalProperties: true}}
+    DashboardTrade:
+      type: object
+      additionalProperties: false
+      required: [player_id, display_name, executed_at, symbol, type, source]
+      properties:
+        player_id: {type: string}
+        display_name: {type: string}
+        executed_at: {type: string, format: date-time}
+        symbol: {type: string}
+        type: {type: string, enum: [buy, sell, correction]}
+        source: {type: string, enum: [fixture, reported]}
+    CompetitionDashboard:
+      type: object
+      additionalProperties: false
+      required: [competition, data_status, players, summary, monthly, daily_winners, daily_results, league_allocation, recent_trades, badges, insights, missing_data, ticker_record]
+      properties:
+        competition: {type: object, additionalProperties: true}
+        data_status: {type: string, enum: [complete, provisional, incomplete, empty]}
+        players: {type: array, items: {$ref: "#/components/schemas/DashboardPlayer"}}
+        summary: {type: object, additionalProperties: true}
+        monthly: {type: object, additionalProperties: true}
+        daily_winners: {type: array, items: {type: object, additionalProperties: true}}
+        daily_results: {type: array, items: {type: object, additionalProperties: true}}
+        league_allocation: {type: array, items: {$ref: "#/components/schemas/DashboardAllocation"}}
+        recent_trades: {type: array, maxItems: 8, items: {$ref: "#/components/schemas/DashboardTrade"}}
+        badges: {type: array, items: {type: object, additionalProperties: true}}
+        insights: {type: array, items: {type: object, additionalProperties: true}}
+        missing_data: {type: array, items: {type: object, additionalProperties: false, required: [date, symbol], properties: {date: {type: string, format: date}, symbol: {type: string}}}}
+        ticker_record: {type: "null", description: Reservado para el enriquecimiento licenciado de Fase 4}
   securitySchemes:
     bearerSession:
       type: http

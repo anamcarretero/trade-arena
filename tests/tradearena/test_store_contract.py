@@ -214,6 +214,7 @@ def postgres_store():
             "006_fractional_reported_trades", "007_user_commissions",
             "008_initial_participant_calendar_join",
             "009_notifications_privacy",
+            "010_competition_dashboard",
         ]
         assert migrate(dsn) == []
         yield PostgresStore(dsn)
@@ -226,6 +227,33 @@ def postgres_store():
 
 def test_postgres_store_passes_same_application_contract(postgres_store):
     _exercise_application_contract(postgres_store)
+
+
+def test_dashboard_migration_upgrades_version_009(postgres_store, tmp_path):
+    schema = f"tradearena_009_{uuid4().hex}"
+    with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
+    previous_dsn = make_conninfo(postgres_store.dsn, options=f"-c search_path={schema}")
+    previous_migrations = tmp_path / "version-009"
+    previous_migrations.mkdir()
+    source = Path(__file__).parents[2] / "migrations"
+    for version in range(1, 10):
+        path = next(source.glob(f"{version:03d}_*.sql"))
+        (previous_migrations / path.name).write_text(path.read_text())
+    try:
+        assert migrate(previous_dsn, previous_migrations)[-1] == "009_notifications_privacy"
+        assert migrate(previous_dsn) == ["010_competition_dashboard"]
+        with psycopg.connect(previous_dsn, row_factory=psycopg.rows.dict_row) as connection:
+            columns = {row["column_name"] for row in connection.execute(
+                """SELECT column_name FROM information_schema.columns
+                     WHERE table_schema = current_schema()
+                       AND table_name = 'portfolio_snapshots'"""
+            ).fetchall()}
+            assert {"trading_day", "provisional", "calculation_version"} <= columns
+            assert connection.execute("SELECT to_regclass('competition_badges') AS value").fetchone()["value"]
+    finally:
+        with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
+            admin.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))
 
 
 def test_postgres_store_preserves_and_anonymizes_account_deletion_contract(
@@ -266,6 +294,7 @@ def test_auth0_migration_upgrades_the_previous_schema(postgres_store, tmp_path):
             "007_user_commissions",
             "008_initial_participant_calendar_join",
             "009_notifications_privacy",
+            "010_competition_dashboard",
         ]
         assert migrate(previous_dsn) == []
     finally:
@@ -294,6 +323,7 @@ def test_trading_migration_upgrades_ta034_schema(postgres_store, tmp_path):
             "007_user_commissions",
             "008_initial_participant_calendar_join",
             "009_notifications_privacy",
+            "010_competition_dashboard",
         ]
     finally:
         with psycopg.connect(postgres_store.dsn, autocommit=True) as admin:
@@ -320,6 +350,7 @@ def test_fractional_reported_migration_upgrades_ta035_schema(postgres_store, tmp
             "006_fractional_reported_trades", "007_user_commissions",
             "008_initial_participant_calendar_join",
             "009_notifications_privacy",
+            "010_competition_dashboard",
         ]
         with psycopg.connect(previous_dsn, row_factory=psycopg.rows.dict_row) as connection:
             columns = connection.execute(
@@ -358,7 +389,9 @@ def test_notifications_privacy_migration_upgrades_008_schema(postgres_store, tmp
     try:
         assert migrate(previous_dsn, previous_migrations)[-1] \
             == "008_initial_participant_calendar_join"
-        assert migrate(previous_dsn) == ["009_notifications_privacy"]
+        assert migrate(previous_dsn) == [
+            "009_notifications_privacy", "010_competition_dashboard",
+        ]
         with psycopg.connect(previous_dsn) as connection:
             indexes = {row[0] for row in connection.execute(
                 """

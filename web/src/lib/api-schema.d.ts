@@ -328,6 +328,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/leagues/{league_id}/competitions/{competition_id}/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCompetitionDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/leagues/{league_id}/invitations": {
         parameters: {
             query?: never;
@@ -633,6 +649,86 @@ export interface components {
             as_of: string;
             rows: components["schemas"]["RankingRow"][];
             digest: string;
+        };
+        DashboardAllocation: {
+            symbol: string;
+            /** @description Fracción decimal entre cero y uno */
+            weight: string;
+        };
+        DashboardSeriesPoint: {
+            /** Format: date */
+            date: string;
+            /** Format: date-time */
+            as_of: string;
+            provisional: boolean;
+            daily_return: string | null;
+            cumulative_return: string | null;
+            complete: boolean;
+        };
+        DashboardPlayer: {
+            id: string;
+            display_name: string;
+            rank: number | null;
+            active: boolean;
+            /** Format: date-time */
+            joined_at: string;
+            joined_late: boolean;
+            as_of: string | null;
+            cumulative_return: string | null;
+            statistics: {
+                [key: string]: unknown;
+            };
+            series: components["schemas"]["DashboardSeriesPoint"][];
+            allocation: components["schemas"]["DashboardAllocation"][];
+            badges: {
+                [key: string]: unknown;
+            }[];
+        };
+        DashboardTrade: {
+            player_id: string;
+            display_name: string;
+            /** Format: date-time */
+            executed_at: string;
+            symbol: string;
+            /** @enum {string} */
+            type: "buy" | "sell" | "correction";
+            /** @enum {string} */
+            source: "fixture" | "reported";
+        };
+        CompetitionDashboard: {
+            competition: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            data_status: "complete" | "provisional" | "incomplete" | "empty";
+            players: components["schemas"]["DashboardPlayer"][];
+            summary: {
+                [key: string]: unknown;
+            };
+            monthly: {
+                [key: string]: unknown;
+            };
+            daily_winners: {
+                [key: string]: unknown;
+            }[];
+            daily_results: {
+                [key: string]: unknown;
+            }[];
+            league_allocation: components["schemas"]["DashboardAllocation"][];
+            recent_trades: components["schemas"]["DashboardTrade"][];
+            badges: {
+                [key: string]: unknown;
+            }[];
+            insights: {
+                [key: string]: unknown;
+            }[];
+            missing_data: {
+                /** Format: date */
+                date: string;
+                symbol: string;
+            }[];
+            /** @description Reservado para el enriquecimiento licenciado de Fase 4 */
+            ticker_record: null;
         };
     };
     responses: {
@@ -1351,6 +1447,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Ranking"];
+                };
+            };
+            /** @description Liga o competición no accesible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getCompetitionDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                league_id: components["parameters"]["LeagueId"];
+                competition_id: components["parameters"]["CompetitionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Analítica porcentual saneada de la competición */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitionDashboard"];
                 };
             };
             /** @description Liga o competición no accesible */

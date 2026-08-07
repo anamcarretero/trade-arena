@@ -17,6 +17,9 @@ from tradearena.application.models import (
     League, Membership, Notification, Profile, Role, TradingAccount, User,
 )
 from tradearena.domain.ranking import RankingRow, RankingSnapshot
+from tradearena.application.dashboard import (
+    CompetitionBadge, PortfolioProjection, RankingProjection,
+)
 from tradearena.domain.trading import (
     Execution, ExecutionSource, JournalEntry, Order, OrderSide, OrderStatus, OrderType,
     Portfolio, Posting, Session,
@@ -750,6 +753,96 @@ class PostgresTrading(_Repository):
             return None
         rows = tuple(RankingRow(**item) for item in row["rows"])
         return RankingSnapshot(competition_id, row["as_of"], rows, row["digest"])
+
+    def save_portfolio_projection(self, snapshot: PortfolioProjection) -> None:
+        row = self.connection.execute(
+            """SELECT digest FROM portfolio_snapshots
+                WHERE portfolio_id = %s AND trading_day = %s AND provisional = %s""",
+            (snapshot.portfolio_id, snapshot.trading_day, snapshot.provisional),
+        ).fetchone()
+        if row and row["digest"] == snapshot.digest:
+            return
+        if row:
+            self.connection.execute(
+                """DELETE FROM portfolio_snapshots
+                    WHERE portfolio_id = %s AND trading_day = %s AND provisional = %s""",
+                (snapshot.portfolio_id, snapshot.trading_day, snapshot.provisional),
+            )
+        self.connection.execute(
+            """INSERT INTO portfolio_snapshots(
+                   portfolio_id, as_of, equity, cumulative_return, state, digest,
+                   trading_day, provisional, calculation_version
+               ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'dashboard-v1')""",
+            (snapshot.portfolio_id, snapshot.as_of, snapshot.equity,
+             snapshot.cumulative_return, Jsonb(snapshot.state), snapshot.digest,
+             snapshot.trading_day, snapshot.provisional),
+        )
+
+    def list_portfolio_projections(self, portfolio_id: str) -> list[PortfolioProjection]:
+        rows = self.connection.execute(
+            """SELECT * FROM portfolio_snapshots
+                WHERE portfolio_id = %s AND trading_day IS NOT NULL
+                ORDER BY trading_day, provisional, as_of""", (portfolio_id,),
+        ).fetchall()
+        return [PortfolioProjection(
+            str(row["portfolio_id"]), row["trading_day"], row["as_of"],
+            row["provisional"], row["equity"], row["cumulative_return"],
+            row["state"], row["digest"],
+        ) for row in rows]
+
+    def save_ranking_projection(self, snapshot: RankingProjection) -> None:
+        row = self.connection.execute(
+            """SELECT digest FROM ranking_snapshots
+                WHERE competition_id = %s AND trading_day = %s AND provisional = %s""",
+            (snapshot.competition_id, snapshot.trading_day, snapshot.provisional),
+        ).fetchone()
+        if row and row["digest"] == snapshot.digest:
+            return
+        if row:
+            self.connection.execute(
+                """DELETE FROM ranking_snapshots
+                    WHERE competition_id = %s AND trading_day = %s AND provisional = %s""",
+                (snapshot.competition_id, snapshot.trading_day, snapshot.provisional),
+            )
+        self.connection.execute(
+            """INSERT INTO ranking_snapshots(
+                   competition_id, as_of, rows, digest, trading_day, provisional,
+                   calculation_version
+               ) VALUES (%s, %s, %s, %s, %s, %s, 'dashboard-v1')""",
+            (snapshot.competition_id, snapshot.as_of, Jsonb(list(snapshot.rows)),
+             snapshot.digest, snapshot.trading_day, snapshot.provisional),
+        )
+
+    def list_ranking_projections(self, competition_id: str) -> list[RankingProjection]:
+        rows = self.connection.execute(
+            """SELECT * FROM ranking_snapshots
+                WHERE competition_id = %s AND trading_day IS NOT NULL
+                ORDER BY trading_day, provisional, as_of""", (competition_id,),
+        ).fetchall()
+        return [RankingProjection(
+            str(row["competition_id"]), row["trading_day"], row["as_of"],
+            row["provisional"], tuple(row["rows"]), row["digest"],
+        ) for row in rows]
+
+    def save_badge(self, badge: CompetitionBadge, created_at: datetime) -> None:
+        self.connection.execute(
+            """INSERT INTO competition_badges(
+                   competition_id, user_id, achievement_key, achieved_on, state, created_at
+               ) VALUES (%s, %s, %s, %s, %s, %s)
+               ON CONFLICT (competition_id, user_id, achievement_key) DO NOTHING""",
+            (badge.competition_id, badge.user_id, badge.key, badge.achieved_on,
+             Jsonb(badge.state), created_at),
+        )
+
+    def list_badges(self, competition_id: str) -> list[CompetitionBadge]:
+        rows = self.connection.execute(
+            """SELECT * FROM competition_badges WHERE competition_id = %s
+               ORDER BY achieved_on, user_id, achievement_key""", (competition_id,),
+        ).fetchall()
+        return [CompetitionBadge(
+            str(row["competition_id"]), str(row["user_id"]),
+            row["achievement_key"], row["achieved_on"], row["state"],
+        ) for row in rows]
 
 
 class PostgresAudit(_Repository):

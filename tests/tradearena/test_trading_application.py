@@ -146,11 +146,11 @@ def test_reported_trade_validates_total_chronology_cash_position_and_usd(context
         fx_rate="1", client_trade_id="valid", now=occurred_at,
     )
     trading.report_trade(**common)
-    with pytest.raises(Conflict, match="cronológicamente"):
-        trading.report_trade(**{
-            **common, "occurred_at": T0 + timedelta(seconds=1),
-            "client_trade_id": "old", "now": occurred_at,
-        })
+    retroactive = trading.report_trade(**{
+        **common, "occurred_at": T0 + timedelta(seconds=1),
+        "client_trade_id": "old", "now": occurred_at,
+    })
+    assert len(retroactive.executions) == 2
     with pytest.raises(Exception, match="USD"):
         trading.report_trade(**{
             **common, "currency": "EUR", "client_trade_id": "eur",
@@ -162,8 +162,8 @@ def test_reported_trade_validates_total_chronology_cash_position_and_usd(context
         })
     with pytest.raises(Conflict, match="posición"):
         trading.report_trade(**{
-            **common, "side": "sell", "quantity_value": "2",
-            "total_amount": "198.85", "client_trade_id": "short",
+            **common, "side": "sell", "quantity_value": "3",
+            "total_amount": "298.85", "client_trade_id": "short",
             "occurred_at": T0 + timedelta(minutes=2),
             "now": T0 + timedelta(minutes=2),
         })

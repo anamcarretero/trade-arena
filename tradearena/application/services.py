@@ -26,6 +26,7 @@ from tradearena.domain.trading import (
     Session, TradingEngine,
 )
 from tradearena.domain.money import decimal, money, price, quantity
+from tradearena.application.dashboard import assemble_dashboard, empty_dashboard
 
 
 class ApplicationError(Exception):
@@ -741,7 +742,7 @@ class CompetitionService:
     ) -> CompetitionView:
         with self.store.transaction() as uow:
             LeagueService._membership(uow, actor_id, league_id)
-            competition = uow.competitions.get(competition_id)
+            competition = uow.competitions.get(competition_id, for_update=True)
             if not competition or competition.league_id != league_id:
                 raise NotFound("competición no encontrada")
             return self._view(competition)
@@ -804,6 +805,28 @@ class CompetitionService:
             competition.starts_at, competition.ends_at, competition.status,
             copy.deepcopy(competition.rules_snapshot), competition.started_at,
         )
+
+
+class DashboardService:
+    """Consulta privada de analítica; nunca expone importes de otro jugador."""
+
+    def __init__(self, store, market) -> None:
+        self.store = store
+        self.market = market
+
+    def get(
+        self, actor_id: str, league_id: str, competition_id: str, now: datetime,
+    ) -> dict[str, object]:
+        with self.store.transaction() as uow:
+            LeagueService._membership(uow, actor_id, league_id)
+            competition = uow.competitions.get(competition_id, for_update=True)
+            if not competition or competition.league_id != league_id:
+                raise NotFound("competición no encontrada")
+            if competition.status is CompetitionStatus.DRAFT:
+                return empty_dashboard(competition)
+            if not competition.rules_snapshot:
+                return empty_dashboard(competition)
+            return assemble_dashboard(uow, competition, self.market, now)
 
 
 class TradingService:
@@ -952,6 +975,10 @@ class TradingService:
                 order_id, normalized_symbol, requested_side, normalized_quantity,
                 OrderType.MARKET, session is Session.EXTENDED, occurred_at,
                 commission=commission,
+            )
+            self._validate_execution_sequence(
+                account, occurred_at, normalized_symbol, requested_side,
+                normalized_quantity, normalized_price, commission,
             )
             try:
                 self._engine(competition).record_reported(
@@ -1125,12 +1152,39 @@ class TradingService:
             raise Conflict("la fecha queda fuera del calendario fijado")
         if occurred_at < account.joined_at:
             raise Conflict("la fecha precede a la incorporación del participante")
-        latest = max(
-            (item.executed_at for item in account.portfolio.executions),
-            default=None,
-        )
-        if latest is not None and occurred_at < latest:
-            raise Conflict("las operaciones deben registrarse cronológicamente")
+
+    @staticmethod
+    def _validate_execution_sequence(
+        account: TradingAccount, occurred_at: datetime, symbol: str,
+        side: OrderSide, amount: Decimal, execution_price: Decimal,
+        commission: Decimal,
+    ) -> None:
+        """Valida saldos a fecha de evento antes de aceptar un alta retroactiva."""
+        events = [
+            (item.executed_at, item.id, item.symbol, item.side, item.quantity,
+             item.price, item.commission, item.total_amount)
+            for item in account.portfolio.executions
+        ]
+        events.append((occurred_at, "~proposed", symbol, side, amount,
+                       execution_price, commission, None))
+        cash = account.portfolio.initial_cash
+        positions: dict[str, Decimal] = {}
+        for (_, _, event_symbol, event_side, event_amount, event_price, fee,
+             declared_total) in sorted(events):
+            gross = money(event_amount * event_price)
+            if event_side is OrderSide.BUY:
+                total = declared_total if declared_total is not None else money(gross + fee)
+                if cash < total:
+                    raise Conflict("saldo insuficiente en la fecha declarada")
+                cash = money(cash - total)
+                positions[event_symbol] = positions.get(event_symbol, Decimal("0")) + event_amount
+            else:
+                held = positions.get(event_symbol, Decimal("0"))
+                if held < event_amount:
+                    raise Conflict("posición insuficiente en la fecha declarada")
+                positions[event_symbol] = held - event_amount
+                total = declared_total if declared_total is not None else money(gross - fee)
+                cash = money(cash + total)
 
     @staticmethod
     def _engine(competition: Competition) -> TradingEngine:

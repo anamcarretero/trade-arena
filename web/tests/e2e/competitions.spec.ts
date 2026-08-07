@@ -28,6 +28,11 @@ test("an owner creates and starts a competition with immutable ES/EN confirmatio
   await expect(page.getByText("Calendario y reglas copiados de forma inmutable")).toBeVisible();
   await expect(page.getByRole("definition").filter({hasText: "3000.00 USD"})).toBeVisible();
   await expect(page.getByText("XNYS · America/New_York")).toBeVisible();
+  await page.getByRole("link", {name: "Abrir dashboard"}).click();
+  await expect(page.getByText("Dashboard de competición", {exact: false})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Rentabilidad acumulada"})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Insights de liga"})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Portfolio agregado"})).toBeVisible();
   await expect(page.getByRole("heading", {name: "Cartera y órdenes"})).toBeVisible();
   const orderForm = page.getByRole("heading", {name: "Nueva orden"}).locator("..");
   await orderForm.getByLabel("Símbolo").fill("AAPL");
@@ -50,12 +55,13 @@ test("an owner creates and starts a competition with immutable ES/EN confirmatio
   await reportedForm.getByRole("button", {name: /Registrar operación/}).click();
   await expect(page.getByText("Operación declarada registrada")).toBeVisible();
   await expect(page.getByText("Declarada por el usuario")).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Últimas operaciones"}).locator("..").getByText("MU")).toBeVisible();
   await expect(page.getByText("1942.00 USD")).toBeVisible();
-  await expect(page.getByRole("strong").filter({hasText: "Member E2E"})).toBeVisible();
+  await expect(page.getByRole("strong").filter({hasText: "Member E2E"}).first()).toBeVisible();
   await expect(page.getByText("Incorporación tardía", {exact: true})).toBeVisible();
   await page.getByRole("link", {name: "EN", exact: true}).click();
-  await expect(page.getByText("Calendar and rules copied immutably")).toBeVisible();
-  await expect(page.getByText("This competition will not change when the general rules are updated.")).toBeVisible();
+  await expect(page.getByText("Competition dashboard", {exact: false})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "League insights"})).toBeVisible();
   await expect(page.getByRole("heading", {name: "Portfolio and orders"})).toBeVisible();
   await expect(page.getByText("Reported by the user")).toBeVisible();
   await expect(page.getByText("Late entry", {exact: true})).toBeVisible();

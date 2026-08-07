@@ -1,17 +1,17 @@
-import type {Competition, Portfolio, Ranking} from "../lib/api";
+import Link from "next/link";
+import type {Competition, CompetitionDashboard} from "../lib/api";
 import {copy, type Locale} from "../lib/i18n";
 import {createCompetition, startCompetition} from "../app/[locale]/app/leagues/actions";
 import {RulesSnapshotConfirmation} from "./rules-snapshot-confirmation";
-import {TradingPanel} from "./trading-panel";
 
 export function CompetitionSection({
-  locale, leagueId, competitions, manager, trading
+  locale, leagueId, competitions, manager, dashboards
 }: {
   locale: Locale;
   leagueId: string;
   competitions: Competition[];
   manager: boolean;
-  trading: Record<string, {portfolio: Portfolio; ranking: Ranking}>;
+  dashboards: Record<string, CompetitionDashboard>;
 }) {
   const text = copy[locale];
   return <section className="arena-section competition-section">
@@ -42,11 +42,20 @@ export function CompetitionSection({
               <input type="hidden" name="competition_id" value={competition.id}/>
               <button className="primary" type="submit">{text.startCompetition}<span aria-hidden="true">→</span></button>
             </form>}
-          {trading[competition.id] && <TradingPanel locale={locale} leagueId={leagueId}
-            competitionId={competition.id} portfolio={trading[competition.id].portfolio}
-            ranking={trading[competition.id].ranking}/>}
+          <div className="competition-summary">
+            <span>{dashboards[competition.id]?.data_status === "empty" ? text.dashboardNoData : text.dashboardLeader}</span>
+            <strong>{leaderName(dashboards[competition.id])}</strong>
+          </div>
+          <Link className="secondary" href={`/${locale}/app/leagues/${encodeURIComponent(leagueId)}/competitions/${encodeURIComponent(competition.id)}`}>
+            {text.openCompetition}
+          </Link>
         </article>)}</div>}
   </section>;
+}
+
+function leaderName(dashboard?: CompetitionDashboard) {
+  const leader = dashboard?.summary.leader as null | {display_name?: string} | undefined;
+  return leader?.display_name ?? "—";
 }
 
 function formatDate(value: string, locale: Locale) {

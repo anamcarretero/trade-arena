@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from tradearena.adapters.memory import MemoryStore
 from tradearena.adapters.market_data import FixtureMarketDataAdapter
 from tradearena.application.services import (
-    AccountService, AuthService, CompetitionService, LeagueService,
+    AccountService, AuthService, CompetitionService, DashboardService, LeagueService,
     NotificationService, SessionService, TradingService,
 )
 from tradearena.ports.identity import IdentityAssertion
@@ -42,11 +42,13 @@ def build_client(readiness=lambda: True):
     notifications.create(
         owner.id, "competition.started", {"message": "Season ready"}, NOW,
     )
+    market = FixtureMarketDataAdapter()
     dispatcher = Api(
         sessions, accounts, leagues, lambda: NOW,
         competitions=CompetitionService(store, ids),
-        trading=TradingService(store, ids, FixtureMarketDataAdapter()),
+        trading=TradingService(store, ids, market),
         notifications=notifications,
+        dashboard=DashboardService(store, market),
     )
     return TestClient(create_app(dispatcher, readiness)), token
 
@@ -169,6 +171,14 @@ def test_fastapi_exposes_portfolio_orders_history_and_ranking():
     ranking = client.get(f"{base}/ranking", headers=headers)
     assert ranking.status_code == 200
     assert ranking.json()["rows"][0]["cumulative_return"] == "0E-12"
+    dashboard = client.get(f"{base}/dashboard", headers=headers)
+    assert dashboard.status_code == 200
+    assert dashboard.json()["data_status"] == "provisional"
+    assert dashboard.json()["recent_trades"] == []
+    serialized = str(dashboard.json()).lower()
+    assert all(field not in serialized for field in (
+        "quantity", "total_amount", "commission", "portfolio_id", "ledger",
+    ))
 
 
 def test_fastapi_reports_fractional_trades_and_compensating_corrections():
