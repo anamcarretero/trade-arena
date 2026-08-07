@@ -24,6 +24,28 @@ def test_xnys_sessions_exclude_weekend_and_market_holiday():
     assert [item[0].isoformat() for item in sessions] == ["2026-07-02", "2026-07-06", "2026-07-07"]
 
 
+def test_current_xnys_session_only_exists_from_market_open():
+    start = datetime(2026, 8, 6, tzinfo=timezone.utc)
+    end = datetime(2026, 8, 8, tzinfo=timezone.utc)
+
+    before_open = sessions_between(
+        start, end, datetime(2026, 8, 7, 12, tzinfo=timezone.utc)
+    )
+    during_session = sessions_between(
+        start, end, datetime(2026, 8, 7, 14, tzinfo=timezone.utc)
+    )
+    after_close = sessions_between(
+        start, end, datetime(2026, 8, 7, 21, tzinfo=timezone.utc)
+    )
+
+    assert [(day.isoformat(), provisional) for day, _, provisional in before_open] \
+        == [("2026-08-06", False)]
+    assert [(day.isoformat(), provisional) for day, _, provisional in during_session] \
+        == [("2026-08-06", False), ("2026-08-07", True)]
+    assert [(day.isoformat(), provisional) for day, _, provisional in after_close] \
+        == [("2026-08-06", False), ("2026-08-07", False)]
+
+
 def test_projection_never_invents_missing_position_price():
     start = datetime(2026, 7, 6, tzinfo=timezone.utc)
     end = start + timedelta(days=2)

@@ -173,7 +173,8 @@ def test_fastapi_exposes_portfolio_orders_history_and_ranking():
     assert ranking.json()["rows"][0]["cumulative_return"] == "0E-12"
     dashboard = client.get(f"{base}/dashboard", headers=headers)
     assert dashboard.status_code == 200
-    assert dashboard.json()["data_status"] == "provisional"
+    # NOW son las 08:00 de Nueva York: la primera sesión aún no ha abierto.
+    assert dashboard.json()["data_status"] == "empty"
     assert dashboard.json()["recent_trades"] == []
     serialized = str(dashboard.json()).lower()
     assert all(field not in serialized for field in (

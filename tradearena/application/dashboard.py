@@ -86,6 +86,10 @@ def _xnys_close(day: date) -> time:
     return time(16)
 
 
+def _xnys_open(_day: date) -> time:
+    return time(9, 30)
+
+
 def sessions_between(start: datetime, end: datetime, now: datetime) -> list[tuple[date, datetime, bool]]:
     """Return canonical XNYS closes and at most one provisional current point."""
     first = start.astimezone(NY).date()
@@ -94,8 +98,13 @@ def sessions_between(start: datetime, end: datetime, now: datetime) -> list[tupl
     current = first
     while current <= last:
         if current.weekday() < 5 and current not in xnys_holidays(current.year):
+            is_today = current == now.astimezone(NY).date()
+            market_open = datetime.combine(current, _xnys_open(current), NY).astimezone(UTC)
+            if is_today and now < market_open:
+                current += timedelta(days=1)
+                continue
             close = datetime.combine(current, _xnys_close(current), NY).astimezone(UTC)
-            provisional = current == now.astimezone(NY).date() and now < close
+            provisional = is_today and now < close
             point_at = min(close, now) if provisional else close
             if point_at >= start and point_at <= end:
                 result.append((current, point_at, provisional))
