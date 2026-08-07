@@ -181,10 +181,14 @@ distinguir cuál de esas condiciones se produjo.
 TA-031 incorpora una aplicación Next.js 16 con App Router, TypeScript estricto,
 `pnpm` y rutas bilingües `/es` y `/en`. La pantalla de acceso, el alta de
 perfil, la selección de idioma y el estado autenticado son responsive. El
-manifest, el icono y un service worker limitado al shell/fallback offline
-permiten instalarla como PWA; las rutas privadas, `/auth/*`, `/language` y los
-orígenes externos no se guardan ni se interceptan. El worker devuelve siempre
-una respuesta de red, caché, fallback o error válida.
+manifest, el icono y un service worker limitado a navegaciones documentales y
+al fallback offline permiten instalarla como PWA. Las peticiones RSC y recursos
+de Next.js, las llamadas no documentales, `/auth/*`, `/language` y los orígenes
+externos no se interceptan; ninguna ruta privada se guarda en caché. Si la red
+y el documento offline no están disponibles, el worker devuelve un `503`
+válido en vez de resolver el `FetchEvent` con una respuesta de error de red.
+En desarrollo local se elimina cualquier worker y caché de shell anterior para
+evitar que una instalación persistente interfiera con Next.js.
 
 Next.js es la única frontera del navegador. `/auth/login` crea `state`, `nonce`
 y PKCE S256 dentro de una transacción cifrada y `HttpOnly` de diez minutos. El

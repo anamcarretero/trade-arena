@@ -296,6 +296,13 @@ automatizada complementa la revisión semántica, de teclado, foco, contraste,
 movimiento, táctil y responsive; no se presenta como sustituto de una auditoría
 asistida completa. TA-038 no introduce ninguna capacidad de TA-039.
 
+Si una navegación documental pierde la red, el service worker presenta el
+documento offline precargado. No intercepta las peticiones RSC ni otros recursos
+internos de Next.js y nunca guarda pantallas privadas. Si también falta el
+fallback, responde `503` sin producir un error de red sintético. En desarrollo
+local la PWA retira workers y cachés persistentes antes de continuar, por lo que
+un worker de una ejecución anterior no puede bloquear una ruta dinámica.
+
 Para ejecutar el backend contra PostgreSQL se aplican primero las migraciones
 con `DATABASE_URL=... python3 -m tradearena migrate` y se arranca después la API
 con `python3 -m tradearena serve`. Liveness solo
