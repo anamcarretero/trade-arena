@@ -14,7 +14,7 @@ añaden participante autenticado, propietario y administrador de liga. Sus
 recursos son privados y solo se exponen por `/api/v1` tras validar sesión y
 membresía activa.
 
-## 0. Flujos del producto nuevo hasta TA-037
+## 0. Flujos del producto nuevo hasta TA-038
 
 1. Identidad verifica un enlace de email de un solo uso o claims Google con
    emisor, audiencia y email verificado; después se emite una sesión propia.
@@ -256,6 +256,45 @@ afectadas incompletas. Esta configuración no se utiliza en despliegues público
 Las fichas enriquecidas de
 ticker, históricos, consenso neutral y récord de activo esperan a la Fase 4 y a
 una licencia confirmada.
+
+### Accesibilidad y recorrido E2E de TA-038
+
+1. Una persona que navega por teclado encuentra primero «Saltar al contenido
+   principal»/«Skip to main content». Tras seguir un enlace interno, el foco se
+   restaura en el `h1` de destino; los controles conservan un indicador visible
+   y un área táctil suficiente.
+2. Cada ruta localizada actualiza `lang` a `es` o `en`. Landmarks,
+   encabezados, etiquetas, ayudas, estados, gráficas y detalles desplegables
+   tienen nombre o alternativa textual equivalente en el idioma elegido.
+3. La validación nativa lleva el foco al primer campo obligatorio incorrecto.
+   Los errores se anuncian de forma asertiva y las confirmaciones de forma
+   cortés; carga, fallo de API, datos incompletos y cotización ausente tienen un
+   mensaje perceptible que no depende exclusivamente del color o movimiento.
+4. Con movimiento reducido, la PWA elimina desplazamiento suave y reduce
+   transiciones y animaciones. A 375 y 414 px los recorridos críticos refluyen
+   sin desplazamiento horizontal.
+5. El E2E abre dos contextos aislados. El propietario crea la liga, invita al
+   segundo email y este acepta; después crea e inicia una competición. El
+   propietario envía una orden con fixture y el segundo jugador declara una
+   operación simulada. Ambos consultan dashboard, ranking, cartera propia y
+   actividad en ES/EN.
+6. El escenario usa importes y comisiones señuelo diferentes para cada
+   participante. Comprueba expresamente que la pantalla y exportación de una
+   sesión no contienen cantidades, precios, importes, comisiones, efectivo,
+   patrimonio, órdenes, ledger ni identificadores financieros de la otra. El
+   dashboard compartido conserva únicamente nombre, porcentajes, pesos y
+   operaciones saneadas; los importes solo aparecen en la cartera propia
+   autorizada y las salidas públicas siguen respetando `show_amounts`.
+7. Una tercera sesión ajena no puede abrir la liga ni una invitación no ligada
+   a su email. La PWA mantiene el mensaje uniforme de recurso privado sin
+   revelar si existe. También se prueban carga diferida, error recuperable,
+   dashboard incompleto y lista de cotizaciones ausentes.
+
+La suite `pnpm test:e2e` incluye el recorrido funcional y los análisis axe. Se
+puede ejecutar solo la auditoría automática con `pnpm test:a11y`. La cobertura
+automatizada complementa la revisión semántica, de teclado, foco, contraste,
+movimiento, táctil y responsive; no se presenta como sustituto de una auditoría
+asistida completa. TA-038 no introduce ninguna capacidad de TA-039.
 
 Para ejecutar el backend contra PostgreSQL se aplican primero las migraciones
 con `DATABASE_URL=... python3 -m tradearena migrate` y se arranca después la API

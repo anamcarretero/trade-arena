@@ -17,7 +17,7 @@ export function TradingPanel({locale, leagueId, competitionId, portfolio, rankin
     portfolio.executions.flatMap(execution => execution.correction_of ? [execution.correction_of] : [])
   );
   return <div className="trading-panel">
-    <h3>{text.trading}</h3>
+    <h2>{text.trading}</h2>
     {portfolio.joined_late && <div className="late-entry" role="status">
       <strong>{text.lateJoiner}</strong><span>{text.lateJoinerExplanation}</span>
     </div>}

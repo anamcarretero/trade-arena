@@ -8,6 +8,7 @@ import {copy, isLocale} from "@/lib/i18n";
 import {invitationPath} from "@/lib/invitations";
 import {canManageLeague, occupiedSeats} from "@/lib/league-state";
 import {inviteMember, removeMember, revokeInvitation} from "../actions";
+import {StatusMessage} from "@/components/status-message";
 
 export default async function LeaguePage({params, searchParams}: {
   params: Promise<{locale: string; leagueId: string}>;
@@ -34,23 +35,23 @@ export default async function LeaguePage({params, searchParams}: {
   const occupied = occupiedSeats(league);
   const emptySeats = Math.max(0, league.max_members - occupied);
 
-  return <main className="app-shell arena-shell">
+  return <main id="main-content" className="app-shell arena-shell" tabIndex={-1}>
     <header className="topbar app-topbar">
       <Link className="wordmark" href={`/${rawLocale}/app`}>TRADE<span>ARENA</span></Link>
-      <div className="app-nav"><Link href={`/${rawLocale}/app`}>{text.backToLeagues}</Link><LocaleSwitcher locale={rawLocale} suffix={`/app/leagues/${league.id}`} /></div>
+      <nav className="app-nav" aria-label={text.appNavigation}><Link href={`/${rawLocale}/app`}>{text.backToLeagues}</Link><LocaleSwitcher locale={rawLocale} suffix={`/app/leagues/${league.id}`} /></nav>
     </header>
 
     <section className="league-hero">
-      <div><p className="eyebrow">{text.privateLeague} · {text.freePlan}</p><h1>{league.name}</h1><p>{occupied}/{league.max_members} {text.seats} · {roleLabel(league.actor_role, text)}</p></div>
+      <div><p className="eyebrow">{text.privateLeague} · {text.freePlan}</p><h1 tabIndex={-1}>{league.name}</h1><p>{occupied}/{league.max_members} {text.seats} · {roleLabel(league.actor_role, text)}</p></div>
       <div className="league-orbit" aria-hidden="true"><strong>{occupied}</strong><span>/ {league.max_members}</span></div>
     </section>
 
-    {state.error && <p className="error arena-message" role="alert">
+    {state.error && <StatusMessage kind="error" className="arena-message">
       {state.error === "access" ? text.leagueAccessError : state.error === "league-full" ? text.leagueFullError : text.leagueActionError}
-    </p>}
-    {state.status && <p className="success arena-message" role="status">
+    </StatusMessage>}
+    {state.status && <StatusMessage kind="status" className="arena-message">
       {state.status === "invited" ? text.invitedStatus : state.status === "revoked" ? text.revokedStatus : state.status === "removed" ? text.removedStatus : state.status === "competition-created" ? text.competitionCreatedStatus : state.status === "competition-started" ? text.competitionStartedStatus : state.status === "order-cancelled" ? text.orderCancelledStatus : state.status === "reported-trade-created" ? text.reportedTradeCreatedStatus : state.status === "reported-trade-corrected" ? text.reportedTradeCorrectedStatus : text.orderSubmittedStatus}
-    </p>}
+    </StatusMessage>}
 
     <section className="arena-section">
       <div className="section-heading"><p className="eyebrow">Arena / 02</p><h2>{text.members}</h2></div>
@@ -92,7 +93,7 @@ export default async function LeaguePage({params, searchParams}: {
 
 function AccessDenied({locale, message}: {locale: "es" | "en"; message: string}) {
   const text = copy[locale];
-  return <main className="app-shell arena-shell"><header className="topbar"><Link className="wordmark" href={`/${locale}/app`}>TRADE<span>ARENA</span></Link><LocaleSwitcher locale={locale} suffix="/app"/></header><section className="access-state"><p className="eyebrow">404 / Private</p><h1>{text.privateLeague}</h1><p>{message}</p><Link className="secondary" href={`/${locale}/app`}>{text.backToLeagues}</Link></section></main>;
+  return <main id="main-content" className="app-shell arena-shell" tabIndex={-1}><header className="topbar"><Link className="wordmark" href={`/${locale}/app`}>TRADE<span>ARENA</span></Link><LocaleSwitcher locale={locale} suffix="/app"/></header><section className="access-state"><p className="eyebrow">404 / Private</p><h1 tabIndex={-1}>{text.privateLeague}</h1><p>{message}</p><Link className="secondary" href={`/${locale}/app`}>{text.backToLeagues}</Link></section></main>;
 }
 
 function formatDate(value: string, locale: "es" | "en") {

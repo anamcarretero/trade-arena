@@ -366,6 +366,39 @@ excepción temporal de desarrollo para Yahoo está aislada tras `MarketDataPort`
 y no reutiliza cachés ni código del legado. El enriquecimiento licenciado de ticker, históricos y consenso neutral de
 analistas queda en Fase 4 y se omite si no hay proveedor autorizado.
 
+TA-038 completa la capa transversal de accesibilidad de la PWA en los
+recorridos críticos ES/EN. El layout localizado sincroniza el atributo `lang`,
+ofrece salto al contenido y restaura el foco en el encabezado de la nueva ruta
+tras una navegación interna. Las páginas privadas incorporan estados
+perceptibles de carga y error; confirmaciones y errores de mutación se anuncian
+como regiones vivas y reciben foco sin depender solo del color. Formularios,
+landmarks, jerarquía de encabezados, gráficas SVG, pesos visuales y detalles
+desplegables conservan nombre o alternativa textual. El sistema visual mantiene
+foco visible, objetivos de al menos 44 px en controles principales, reflujo sin
+scroll horizontal y desactiva animaciones y desplazamiento suave cuando se
+solicita movimiento reducido.
+
+`web/src/proxy.ts` solo anota las rutas `/es/**` y `/en/**` con un encabezado
+interno para que el layout raíz emita el `lang` correcto ya en el HTML del
+servidor; no autentica, autoriza, redirige ni reenvía credenciales.
+
+Playwright usa `@axe-core/playwright` con las reglas WCAG 2.0 A/AA, 2.1 AA y
+2.2 AA sobre portadas, planes, perfil, inicio privado, liga, competición,
+notificaciones y privacidad en ambos idiomas. El fixture HTTP E2E modela dos
+sesiones independientes: propietario, invitación ligada al segundo email,
+aceptación, competición, orden y operación declarada. Cada petición de cartera
+se resuelve por la identidad autenticada y el dashboard compartido contiene
+solo metadatos saneados; las pruebas usan importes señuelo distintos para
+demostrar que cantidades, precios, totales, comisiones, efectivo, patrimonio,
+órdenes y ledger ajenos no aparecen en la otra sesión. Los importes monetarios
+siguen confinados a la cartera propia autorizada; cualquier salida pública
+continúa además sometida a `show_amounts`.
+
+La automatización de TA-038 es determinista, local y sin secretos ni mercado
+externo. No añade staging, infraestructura cloud, Stripe, planes Friends/Club,
+importaciones de broker ni proveedores de producción; ese trabajo empieza en
+TA-039 o en fases posteriores según el plan canónico.
+
 ### Portabilidad operativa
 
 `Dockerfile` es el artefacto OCI común de API/migración y `Dockerfile.web` el
