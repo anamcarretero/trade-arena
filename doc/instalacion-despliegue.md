@@ -9,16 +9,16 @@ documentados en una consola de proveedor. Al incorporar un proveedor o una
 plataforma se versionan en el mismo cambio su infraestructura como código,
 variables, comandos, verificación, rollback y procedimiento de recuperación.
 
-Actualmente se soportan dos formas reproducibles:
+Actualmente existen estas formas reproducibles:
 
 | Entorno | Artefactos canónicos | Estado |
 |---|---|---|
 | Local o servidor con Docker | `Dockerfile`, `Dockerfile.web`, `compose.yaml`, `.env.example`, `scripts/install-compose.sh` y `scripts/verify-deployment.sh` | API, PostgreSQL y PWA/BFF ejecutables |
-| Plataforma de contenedores OCI con PostgreSQL administrado | misma imagen, comandos `serve`/`migrate` y esta guía | portable; la infraestructura específica llega en TA-038 |
+| Staging gestionado | `infra/staging/`, `.github/workflows/staging.yml` y `scripts/staging/` | automatización versionada; no desplegado ni comprobado sin credenciales |
+| Plataforma OCI genérica con PostgreSQL administrado | misma imagen, comandos `serve`/`migrate` y esta guía | portable, no un entorno declarado operativo |
 
-La plataforma objetivo sigue siendo Cloud Run y Neon. Hasta que TA-038 añada
-su infraestructura como código no se considera un despliegue de producción
-reproducible, aunque la imagen sea compatible.
+TA-039 define Cloud Run, Neon y Vercel para staging. Producción permanece
+cerrada: no hay módulo, workflow, target ni promoción de producción.
 
 ## Requisitos
 
@@ -201,6 +201,158 @@ mecanismo nativo de backup/PITR y se documentan aquí sus comandos o IaC.
 - `docker compose logs api migrate postgres` es la primera fuente de diagnóstico.
 - Antes de promover una versión se ejecutan suite, migraciones sobre esquema
   vacío/anterior, smoke tests y restauración cuando corresponda.
+
+## Staging gestionado de TA-039
+
+### Contrato y requisitos
+
+`infra/staging/` usa Terraform >=1.11 y fija proveedores Google, Neon y Vercel.
+Define Artifact Registry; Cloud Run Service en `europe-west3` con mínimo cero;
+un Cloud Run Job de migración que reutiliza `Dockerfile`; IAM/OIDC limitado al
+repositorio y `main`; nombres de Secret Manager; Neon
+`aws-eu-central-1`; proyecto y custom environment Vercel; y la API/identidad de
+Scheduler sin targets. No contiene jobs financieros, Massive ni producción.
+
+Se necesitan, proporcionados por el operador y nunca versionados:
+
+- un proyecto GCP dedicado, ADC para bootstrap y bucket GCS privado/versionado
+  para el estado;
+- `NEON_API_KEY` y `VERCEL_API_TOKEN` con alcance del proyecto/equipo;
+- `infra/staging/terraform.tfvars` y `backend.hcl`, ambos ignorados;
+- los cuatro valores runtime: `DATABASE_URL`, `BFF_SHARED_SECRET`,
+  `AUTH0_CLIENT_SECRET` y `SESSION_ENCRYPTION_KEY`;
+- un origen HTTPS estable de staging ya autorizado en Auth0;
+- un environment GitHub `staging` con variables `GCP_PROJECT_ID`,
+  `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOYER_SERVICE_ACCOUNT`,
+  `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` y secreto `VERCEL_TOKEN`;
+- para integración Neon de PR, variable `NEON_PROJECT_ID` y secreto
+  `NEON_API_KEY` del repositorio.
+
+Los runbooks de copia y restauración requieren clientes PostgreSQL 16
+compatibles (`pg_dump`, `pg_restore`, `psql`); CI ensaya la secuencia contra dos
+bases aisladas de su PostgreSQL 16 de servicio.
+
+No se debe ejecutar `terraform apply` hasta autorizar expresamente recursos y
+posible coste. Un plan local no es un despliegue.
+
+### Bootstrap e instalación
+
+```bash
+cp infra/staging/terraform.tfvars.example infra/staging/terraform.tfvars
+cp infra/staging/backend.hcl.example infra/staging/backend.hcl
+terraform -chdir=infra/staging init -backend-config=backend.hcl
+./scripts/staging/bootstrap.sh plan
+CONFIRM_STAGING_APPLY=TA-039-STAGING ./scripts/staging/bootstrap.sh apply
+```
+
+El primer comando operativo siempre es `plan`. Tras el apply, añade versiones
+de secretos sin imprimir valores, por ejemplo:
+
+```bash
+GCP_PROJECT_ID=... NEW_DATABASE_URL='...' \
+  ./scripts/staging/rotate-secret.sh \
+  tradearena-staging-database-url NEW_DATABASE_URL
+```
+
+El primer apply mantiene `deploy_runtime=false`: crea cimientos y contenedores
+de secretos, pero no intenta arrancar Cloud Run sin imagen/valores. Publica la
+imagen canónica, copia su digest a `api_image`, cambia
+`deploy_runtime=true` y repite plan/apply:
+
+```bash
+GCP_PROJECT_ID=... ./scripts/staging/publish-image.sh
+./scripts/staging/bootstrap.sh plan
+CONFIRM_STAGING_APPLY=TA-039-STAGING ./scripts/staging/bootstrap.sh apply
+```
+
+Para `BFF_SHARED_SECRET`, `AUTH0_CLIENT_SECRET` y
+`SESSION_ENCRYPTION_KEY`, usa el tercer argumento para sincronizar el contrato
+correspondiente del custom environment Vercel. La rotación de la clave de cookie
+cierra sesiones web. Verifica la versión nueva antes de deshabilitar la anterior.
+
+### Actualización y despliegue
+
+Cada merge a `main` ejecuta `.github/workflows/staging.yml` con esta secuencia:
+
+1. OIDC GitHub→GCP sin clave persistente;
+2. build de `Dockerfile` y push a Artifact Registry por digest;
+3. actualización/ejecución de `tradearena-migrate-staging` y espera de éxito;
+4. actualización del servicio API al mismo digest y readiness;
+5. despliegue de `web/` mediante Vercel CLI al target `staging`;
+6. smoke de API y PWA con `scripts/verify-deployment.sh`.
+
+La misma secuencia se puede ejecutar deliberadamente con
+`scripts/staging/update.sh`; no usa `--prod`. La preview de cada PR es solo la
+PWA de Vercel. No hay API Cloud Run ni entorno full-stack permanente por PR.
+Un cambio backend/migración puede usar una rama Neon efímera en
+`.github/workflows/neon-pr.yml`; se elimina en `always()` y tiene caducidad.
+
+### Verificación y smoke tests
+
+```bash
+./scripts/staging/verify.sh https://API-STAGING https://PWA-STAGING
+```
+
+Se comprueban liveness, readiness, OpenAPI, salud web, portadas ES/EN y
+manifest. Solo un run remoto exitoso permite afirmar «staging desplegado».
+Terraform `fmt`/`validate`, CI local o dry-run deben describirse como validación
+local o plan, nunca como prueba de staging.
+
+### Backup y restauración ensayable
+
+```bash
+DATABASE_URL='...' ./scripts/staging/backup.sh
+RESTORE_DATABASE_URL='...' \
+  ./scripts/staging/restore-drill.sh backups/archivo.dump --confirm-isolated
+```
+
+El dump es sensible, usa permisos privados y `backups/` está ignorado. La URL
+de restauración debe corresponder a una base aislada y desechable; el script se
+niega si coincide con `DATABASE_URL`. La restauración válida vuelve a aplicar
+migraciones y consulta `schema_migrations`. Neon PITR/retención complementa,
+pero no sustituye, este ensayo portable.
+
+### Rollback compatible
+
+```bash
+GCP_PROJECT_ID=... \
+PREVIOUS_BACKEND_IMAGE='...@sha256:...' \
+PREVIOUS_VERCEL_DEPLOYMENT='https://...' \
+VERCEL_TOKEN='...' ./scripts/staging/rollback.sh
+```
+
+El rollback mueve la API al digest anterior y vuelve a desplegar el deployment
+PWA anterior dentro del target `staging`; nunca invoca promoción o rollback de
+producción. No ejecuta SQL descendente: el binario previo debe tolerar el esquema expandido. Una migración
+destructiva requiere expand/contract en cambios separados: expandir, desplegar
+lectores/escritores compatibles, retirar uso, y contraer en una entrega futura.
+
+La secuencia futura de producción, todavía sin automatización ni autorización,
+será siempre: migraciones compatibles→API→PWA. Nunca PWA antes de API ni una
+contracción junto al despliegue que deja de usar los campos.
+
+### Diagnóstico, rotación y retirada
+
+```bash
+GCP_PROJECT_ID=... ./scripts/staging/diagnose.sh
+./scripts/staging/retire.sh plan
+CONFIRM_STAGING_RETIRE=RETIRE-TA-STAGING ./scripts/staging/retire.sh apply
+```
+
+`diagnose.sh` muestra estado, últimas migraciones ejecutadas y logs recientes;
+no recupera valores de Secret Manager. Antes de retirar: congela despliegues,
+crea/verifica backup, ensaya restauración, cambia
+`cloud_run_deletion_protection=false` mediante un apply revisado, genera el plan
+de destrucción y obtiene aprobación. Después revoca tokens Neon/Vercel, elimina
+versiones de secretos según retención y conserva evidencia/backup cifrado. El
+script solo planifica salvo confirmación literal.
+
+### Estado real de TA-039
+
+En esta entrega se han validado código, formato, sintaxis, tests y dry-runs que
+no necesitan credenciales. No se han creado recursos, cargado secretos,
+desplegado staging, ejecutado smoke remoto ni ensayado restauración Neon. Esos
+bloqueos deben aparecer en la PR y en el primer run autorizado.
 
 ## Obligación para entornos futuros
 

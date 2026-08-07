@@ -50,12 +50,15 @@
    Playwright y E2E aislado de dos participantes con estados degradados,
    permisos y privacidad financiera negativa.
 
-## Siguiente — Fase 3
+## En curso — Fase 3
 
-1. TA-039 staging reproducible: Vercel, Neon Frankfurt, Cloud Run Frankfurt,
-   Secret Manager y GitHub OIDC; ramas Neon efímeras para integración en PR.
+1. TA-039 staging reproducible: IaC de Vercel, Neon Frankfurt, Cloud Run
+   `europe-west3`, Secret Manager, Artifact Registry, Scheduler sin targets y
+   GitHub OIDC; CI completo, Neon efímero, despliegue secuencial y runbooks.
+   Falta aplicar con autorización, ejecutar smoke remoto y ensayar restauración;
+   staging no se declara probado.
 
-## Fases 4–7
+## Siguiente — Fase 4; después Fases 5–7
 
 - Integrar datos licenciados y calendario; outbox PostgreSQL y Cloud Run Jobs
   idempotentes para ejecución, valoración y ranking, con Scheduler, reintentos

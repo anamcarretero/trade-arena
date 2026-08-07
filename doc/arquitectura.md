@@ -421,6 +421,18 @@ migraciones, health checks, backup/restauración y rollback. Una configuración
 que solo exista en la consola de un proveedor no forma parte de la arquitectura
 soportada.
 
+TA-039 añade `infra/staging/` como módulo Terraform único del entorno integrado
+no productivo y `scripts/staging/` como frontera operativa ejecutable. Terraform
+versiona nombres, configuración e IAM, pero nunca versiones con valores de
+secretos. Su estado debe residir en un bucket GCS privado, versionado y separado;
+`backend.hcl` y `terraform.tfvars` reales permanecen fuera de Git.
+
+La imagen de `Dockerfile` se publica por digest en Artifact Registry y alimenta
+dos procesos con identidades distintas: el Cloud Run Job finito de migración y
+el Cloud Run Service de FastAPI. `Dockerfile.web` continúa siendo el artefacto
+web canónico para Compose; Vercel construye el mismo árbol `web/` y regenera el
+cliente OpenAPI. No se introduce ningún artefacto alternativo.
+
 ### Despliegue objetivo de TradeArena
 
 ```mermaid
@@ -428,9 +440,10 @@ flowchart LR
   B["Navegador"] --> W["Next.js PWA/BFF en Vercel"]
   W --> A["FastAPI en Cloud Run Service"]
   A --> N["PostgreSQL Neon — Frankfurt"]
-  S["Cloud Scheduler"] --> J["Cloud Run Jobs"]
-  J --> N
-  M["Massive con licencia"] --> J
+  G["GitHub Actions OIDC"] --> M["Cloud Run Job de migración"]
+  M --> N
+  G --> A
+  S["Cloud Scheduler habilitado, sin targets TA-039"]
 ```
 
 - Vercel servirá la PWA, creará previews por rama y conservará la sesión en el BFF;
@@ -440,12 +453,29 @@ flowchart LR
 - Neon `aws-eu-central-1` es la fuente de verdad. Los PR que cambien backend o
   migraciones usarán una rama efímera solo para integración en CI; las previews
   de interfaz no acceden directamente a esa rama.
-- Precios, órdenes, eventos corporativos, valoraciones y rankings se ejecutarán
-  como Cloud Run Jobs finitos, separados e idempotentes. Cloud Scheduler los
-  invocará con identidad de servicio; no se mantendrán workers permanentes en
-  el MVP.
+- TA-039 solo habilita Cloud Scheduler y crea su identidad sin permisos ni
+  targets. Los jobs de precios, órdenes, eventos corporativos, valoraciones y
+  rankings pertenecen a Fase 4; no existe worker permanente.
 - Staging usa Cloud Run `europe-west3` y Neon en Frankfurt. Secret Manager
   conserva credenciales y GitHub Actions accede a GCP mediante OIDC.
+
+### IAM, secretos y red de TA-039
+
+- El proveedor OIDC acepta únicamente tokens del repositorio canónico y de
+  `refs/heads/main`; no hay JSON de cuenta de servicio persistente.
+- La identidad de despliegue solo escribe en el Artifact Registry de staging,
+  actualiza/ejecuta sus dos recursos Cloud Run e impersona sus identidades
+  runtime. No puede leer secretos.
+- La API lee `DATABASE_URL` y `BFF_SHARED_SECRET`; la migración solo
+  `DATABASE_URL`. Scheduler no recibe permisos hasta que Fase 4 defina targets.
+- Cloud Run admite transporte HTTPS desde Vercel. FastAPI conserva sesión opaca,
+  secreto BFF y `404` privado como fronteras de aplicación. Neon no se expone al
+  navegador ni a previews; solo API, migración y CI reciben un DSN.
+- Secret Manager versiona los contratos de DSN, secreto BFF, client secret de
+  Auth0 y clave de cookie. Los dos últimos se cargan también en Vercel mediante
+  canal de operador, nunca en Terraform, Git o variables `NEXT_PUBLIC_*`.
+- Cloud Run fija `MARKET_DATA_PROVIDER=fixture`. Yahoo continúa permitido solo
+  en desarrollo local.
 
 ### Datos y contratos principales
 
@@ -492,6 +522,8 @@ ranking, `rebase_from` reinicia esta composición en `COMPETITION_START`.
 | Workflow | Disparador | Responsabilidad |
 |---|---|---|
 | `.github/workflows/ci.yml` | cada pull request | instala dependencias, prueba PostgreSQL 16 y migraciones, construye y verifica la instalación Compose desde cero, ejecuta toda la suite Python y reproduce el ranking histórico offline con datos ficticios |
+| `.github/workflows/neon-pr.yml` | PR con backend o migraciones | crea una rama Neon efímera con caducidad, ejecuta migraciones/integración y la elimina siempre; requiere credenciales configuradas |
+| `.github/workflows/staging.yml` | `main` o manual | usa OIDC, publica por digest, migra, despliega API y PWA staging y ejecuta smoke tests |
 | `.github/workflows/inbox.yml` | `repository_dispatch` o manual | lee IMAP, autentica, cifra extractos, recalcula y publica si hubo cambios |
 | `.github/workflows/ranking.yml` | cambios en `players/` o `trader/`, dispatch o manual | ejecuta tests, actualiza precios/analistas, genera artefactos y abre/cierra aviso de extractos no descifrables |
 | `.github/workflows/guard.yml` | push a `main` | para la vía de token, revierte cambios fuera de la carpeta del jugador asignado en `PLAYER_OWNERS` |
@@ -501,15 +533,20 @@ Los workflows de ingesta y ranking usan grupos de concurrencia y reintentos de
 La carpeta `docs/` es la raíz configurada para GitHub Pages; no confundirla con
 `doc/`, que contiene documentación de mantenimiento.
 
-El CI de pull request no usa secretos, red externa ni datos reales. Es una
-puerta de línea base para todo el repositorio; TA-030 añade el contrato OpenAPI
-y PostgreSQL 16 aislado sin sustituir las comprobaciones deterministas.
+El CI base usa PostgreSQL 16 aislado, fixtures y datos ficticios; no usa datos
+reales ni mercado externo. Regenera OpenAPI, ejecuta Python, ranking offline,
+lint, tipos, unitarias web, build, Playwright y axe, y valida Docker/Compose,
+Terraform, scripts, workflows y permisos. Neon es una ampliación condicional
+para cambios backend y nunca alimenta una preview o el navegador.
 
-La automatización anterior pertenece al legado. TradeArena añadirá CI de
-backend/PWA, ramas Neon efímeras para integración y despliegue de staging tras
-fusionar. Vercel gestionará las previews de la PWA; Cloud Run no se desplegará
-por PR. La promoción de producción será explícita y permanecerá bloqueada por
-las puertas legales, de licencia y recuperación.
+Vercel gestiona solo previews de la PWA. Cloud Run no se despliega por PR y no
+existe un entorno full-stack permanente por rama. Después de `main`, staging
+sigue migración compatible→API→PWA→smoke. Producción no tiene workflow ni rama
+Vercel activa y permanece cerrada.
+
+La validación local o un plan no prueban staging. Solo se marca desplegado y
+comprobado cuando un run con credenciales completa smoke y una restauración
+aislada ensayada.
 
 ## Seguridad y operaciones
 
