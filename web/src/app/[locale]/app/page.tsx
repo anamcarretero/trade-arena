@@ -6,6 +6,7 @@ import {copy, isLocale} from "@/lib/i18n";
 import {invitationPath} from "@/lib/invitations";
 import {canCreateFreeLeague, occupiedSeats} from "@/lib/league-state";
 import {acceptInvitation, createLeague} from "./leagues/actions";
+import {StatusMessage} from "@/components/status-message";
 
 export default async function Dashboard({params, searchParams}: {
   params: Promise<{locale: string}>;
@@ -22,20 +23,20 @@ export default async function Dashboard({params, searchParams}: {
   const error = (await searchParams).error;
   const canCreate = canCreateFreeLeague(leagues);
 
-  return <main className="app-shell arena-shell">
+  return <main id="main-content" className="app-shell arena-shell" tabIndex={-1}>
     <header className="topbar app-topbar">
       <Link className="wordmark" href={`/${rawLocale}/app`}>TRADE<span>ARENA</span></Link>
-      <div className="app-nav"><Link href={`/${rawLocale}/app/notifications`}>{text.notifications}</Link><Link href={`/${rawLocale}/app/account`}>{text.account}</Link><Link href={`/${rawLocale}/app/profile`}>{text.editProfile}</Link><LocaleSwitcher locale={rawLocale} suffix="/app" /></div>
+      <nav className="app-nav" aria-label={text.appNavigation}><Link href={`/${rawLocale}/app/notifications`}>{text.notifications}</Link><Link href={`/${rawLocale}/app/account`}>{text.account}</Link><Link href={`/${rawLocale}/app/profile`}>{text.editProfile}</Link><LocaleSwitcher locale={rawLocale} suffix="/app" /></nav>
     </header>
 
     <section className="arena-hero">
-      <div><p className="eyebrow">{account.user.email}</p><h1>{text.arenaHome}</h1><p>{text.arenaIntro}</p><nav className="mobile-account-nav"><Link href={`/${rawLocale}/app/notifications`}>{text.notifications}</Link><Link href={`/${rawLocale}/app/account`}>{text.account}</Link></nav></div>
+      <div><p className="eyebrow">{account.user.email}</p><h1 tabIndex={-1}>{text.arenaHome}</h1><p>{text.arenaIntro}</p><nav className="mobile-account-nav" aria-label={text.accountNavigation}><Link href={`/${rawLocale}/app/notifications`}>{text.notifications}</Link><Link href={`/${rawLocale}/app/account`}>{text.account}</Link></nav></div>
       <form action="/auth/logout" method="post"><button className="text-button" type="submit">{text.logout}</button></form>
     </section>
 
-    {error && <p className="error arena-message" role="alert">
+    {error && <StatusMessage kind="error" className="arena-message">
       {error === "league-limit" ? text.leagueLimitError : text.leagueActionError}
-    </p>}
+    </StatusMessage>}
 
     {invitations.length > 0 && <section className="arena-section">
       <div className="section-heading"><p className="eyebrow">TradeArena / Invite</p><h2>{text.pendingInvitations}</h2></div>
@@ -56,9 +57,9 @@ export default async function Dashboard({params, searchParams}: {
       <div className="section-heading"><p className="eyebrow">TradeArena / Leagues</p><h2>{text.yourLeagues}</h2></div>
       {leagues.length === 0 ? <p className="empty-copy">{text.noLeagues}</p> : <div className="league-grid">
         {leagues.map(league => <article className="league-card" key={league.id}>
-          <div className="league-card-top"><span className="status-pill live"><i/>{text.privateLeague}</span><span>{text.freePlan}</span></div>
+          <div className="league-card-top"><span className="status-pill live"><i aria-hidden="true"/>{text.privateLeague}</span><span>{text.freePlan}</span></div>
           <h3>{league.name}</h3>
-          <div className="seat-meter" aria-label={`${league.members.length + league.invitations.length}/${league.max_members} ${text.seats}`}>
+          <div className="seat-meter" role="img" aria-label={`${league.members.length + league.invitations.length}/${league.max_members} ${text.seats}`}>
             {Array.from({length: league.max_members}, (_, index) => <i className={index < occupiedSeats(league) ? "filled" : ""} key={index}/>) }
           </div>
           <p>{occupiedSeats(league)}/{league.max_members} {text.seats} · {roleLabel(league.actor_role, text)}</p>

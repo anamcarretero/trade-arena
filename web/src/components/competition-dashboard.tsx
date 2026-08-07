@@ -21,11 +21,14 @@ export function CompetitionDashboardView({locale, dashboard}: {
   </section>;
 
   return <div className="dashboard-stack">
-    {dashboard.data_status === "incomplete" && <p className="dashboard-warning" role="status">{text.incompleteData}</p>}
+    {dashboard.data_status === "incomplete" && <div className="dashboard-warning" role="status" aria-live="polite" aria-atomic="true">
+      <p>{text.incompleteData}</p>
+      {dashboard.missing_data.length > 0 && <details><summary>{text.missingQuotes}</summary><ul>{dashboard.missing_data.map(item => <li key={`${item.date}-${item.symbol}`}>{formatDate(item.date, locale)} · {item.symbol}</li>)}</ul></details>}
+    </div>}
     {dashboard.data_status === "provisional" && <p className="dashboard-warning" role="status">{text.provisionalData}</p>}
 
     <section className="dashboard-chart-card">
-      <div className="section-heading"><p className="eyebrow">Performance / XNYS</p><h2>{text.cumulativeReturn}</h2></div>
+      <div className="section-heading"><p className="eyebrow">Performance / XNYS</p><h2 id="return-chart-title">{text.cumulativeReturn}</h2></div>
       <ReturnChart locale={locale} players={dashboard.players}/>
       {summary.leader && <p className="chart-leader"><strong>{summary.leader.display_name}</strong> {percent(summary.leader.cumulative_return, locale)}</p>}
     </section>
@@ -74,7 +77,7 @@ export function CompetitionDashboardView({locale, dashboard}: {
     </DashboardCard>
 
     <DashboardCard title={text.dailyResults}>
-      <div className="day-detail-list">{days.map(day => <details key={day.date}><summary>{formatDate(day.date, locale)}{day.provisional ? " · provisional" : ""}</summary>
+      <div className="day-detail-list">{days.map(day => <details key={day.date}><summary>{formatDate(day.date, locale)}{day.provisional ? ` · ${text.provisionalLabel}` : ""}</summary>
         <div>{day.players.map(player => <p key={player.player_id}><strong>{player.display_name}</strong><span>{player.complete && player.daily_return !== null ? percent(player.daily_return, locale) : "—"} / {player.cumulative_return !== null ? percent(player.cumulative_return, locale) : "—"}</span></p>)}</div>
       </details>)}</div>
     </DashboardCard>
@@ -89,7 +92,8 @@ function ReturnChart({players, locale}: {players: Player[]; locale: Locale}) {
   const min = Math.min(0, ...values), max = Math.max(0, ...values), span = max - min || .01;
   const x = (date: string) => 30 + (dates.indexOf(date) / Math.max(1, dates.length - 1)) * 640;
   const y = (value: number) => 20 + ((max - value) / span) * 190;
-  return <div className="responsive-chart"><svg viewBox="0 0 700 240" role="img" aria-label={copy[locale].cumulativeReturn}>
+  return <div className="responsive-chart"><svg viewBox="0 0 700 240" role="img" aria-labelledby="return-chart-title return-chart-description">
+    <desc id="return-chart-description">{copy[locale].chartDescription}</desc>
     <line x1="30" y1={y(0)} x2="670" y2={y(0)} className="zero-line"/>
     {players.map(player => {
       const valid = player.series.filter(point => point.cumulative_return !== null);
@@ -101,8 +105,9 @@ function ReturnChart({players, locale}: {players: Player[]; locale: Locale}) {
 
 function PlayerCard({player, locale}: {player: Player; locale: Locale}) {
   const stats = player.statistics as {best_daily_return?: string; worst_daily_return?: string; current_streak?: number; sessions?: number};
+  const text = copy[locale];
   return <details className="player-detail"><summary><span>{player.rank ?? "—"}</span><strong>{player.display_name}</strong><em>{player.cumulative_return ? percent(player.cumulative_return, locale) : "—"}</em></summary>
-    <div className="player-stat-row"><span>Max {percent(stats.best_daily_return ?? "0", locale)}</span><span>Min {percent(stats.worst_daily_return ?? "0", locale)}</span><span>{stats.sessions ?? 0} XNYS</span><span>Streak {stats.current_streak ?? 0}</span></div>
+    <div className="player-stat-row"><span>{text.maximum} {percent(stats.best_daily_return ?? "0", locale)}</span><span>{text.minimum} {percent(stats.worst_daily_return ?? "0", locale)}</span><span>{stats.sessions ?? 0} XNYS</span><span>{text.streak} {stats.current_streak ?? 0}</span></div>
     <Allocation rows={player.allocation} locale={locale}/>
   </details>;
 }
@@ -120,7 +125,7 @@ function DashboardCard({title, children}: {title: string; children: React.ReactN
 function Metric({label, value}: {label: string; value: string}) { return <article><span>{label}</span><strong>{value}</strong></article>; }
 
 function Allocation({rows, locale}: {rows: Array<{symbol: string; weight: string}>; locale: Locale}) {
-  return <div className="allocation-list">{rows.map(row => <div key={row.symbol}><span>{row.symbol}</span><i><b style={{width: `${Math.max(0, Math.min(100, Number(row.weight) * 100))}%`}}/></i><strong>{percent(row.weight, locale)}</strong></div>)}</div>;
+  return <div className="allocation-list">{rows.map(row => <div key={row.symbol}><span>{row.symbol}</span><i aria-hidden="true"><b style={{width: `${Math.max(0, Math.min(100, Number(row.weight) * 100))}%`}}/></i><strong>{percent(row.weight, locale)}</strong></div>)}</div>;
 }
 
 function colorIndex(id: string) { return [...id].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 6; }

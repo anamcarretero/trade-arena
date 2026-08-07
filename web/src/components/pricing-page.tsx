@@ -6,11 +6,11 @@ import {PublicHeader} from "./public-header";
 export function PricingPage({locale, authenticated}: {locale: Locale; authenticated: boolean}) {
   const text = pricingCopy[locale];
   const cta = pricingCta(locale, authenticated);
-  return <main className="landing pricing-shell">
+  return <main id="main-content" className="landing pricing-shell" tabIndex={-1}>
     <PublicHeader locale={locale} page="pricing" authenticated={authenticated} />
     <section className="pricing-hero" aria-labelledby="pricing-title">
       <p className="eyebrow">{text.eyebrow}</p>
-      <h1 id="pricing-title">{text.title}</h1>
+      <h1 id="pricing-title" tabIndex={-1}>{text.title}</h1>
       <p>{text.intro}</p>
     </section>
     <section className="pricing-grid" aria-label={text.pricingNav}>

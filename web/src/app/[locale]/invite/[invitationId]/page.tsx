@@ -22,12 +22,12 @@ export default async function InvitationPage({params, searchParams}: {
   const text = copy[rawLocale];
   const error = Boolean((await searchParams).error);
 
-  return <main className="app-shell invitation-shell">
+  return <main id="main-content" className="app-shell invitation-shell" tabIndex={-1}>
     <header className="topbar"><Link className="wordmark" href={`/${rawLocale}/app`}>TRADE<span>ARENA</span></Link><LocaleSwitcher locale={rawLocale} suffix={`/invite/${encodeURIComponent(invitationId)}`}/></header>
     <section className="invitation-accept-card">
       <div className="invite-signal" aria-hidden="true"><span>01</span><i/><span>02</span></div>
       <p className="eyebrow">TradeArena / Invite</p>
-      <h1>{text.invitationTitle}</h1>
+      <h1 tabIndex={-1}>{text.invitationTitle}</h1>
       {!invitation || error ? <><p className="error" role="alert">{text.invitationAccessError}</p><Link className="secondary" href={`/${rawLocale}/app`}>{text.backToLeagues}</Link></> : <>
         <p>{text.invitationIntro}</p><h2>{invitation.league_name}</h2><p className="meta">{text.expires}: {formatDate(invitation.expires_at, rawLocale)}</p>
         <form action={acceptInvitation}><input type="hidden" name="locale" value={rawLocale}/><input type="hidden" name="invitation_id" value={invitation.id}/><button className="primary" type="submit">{text.acceptInvitation}<span aria-hidden="true">→</span></button></form>

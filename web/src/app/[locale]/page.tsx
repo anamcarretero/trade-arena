@@ -2,6 +2,7 @@ import {MarketPreview} from "@/components/market-preview";
 import {PublicHeader} from "@/components/public-header";
 import {copy, isLocale} from "@/lib/i18n";
 import {notFound} from "next/navigation";
+import {StatusMessage} from "@/components/status-message";
 
 export default async function Landing({params, searchParams}: {params: Promise<{locale: string}>; searchParams: Promise<{auth_error?: string}>}) {
   const {locale: rawLocale} = await params;
@@ -9,14 +10,14 @@ export default async function Landing({params, searchParams}: {params: Promise<{
   const locale = rawLocale;
   const text = copy[locale];
   const authError = Boolean((await searchParams).auth_error);
-  return <main className="landing">
+  return <main id="main-content" className="landing" tabIndex={-1}>
     <PublicHeader locale={locale} page="home" />
     <section className="hero">
       <div className="hero-copy">
         <p className="eyebrow">{text.eyebrow}</p>
-        <h1><span className="gradient-text">{text.taglineAccent}</span><span>{text.taglineMain}</span></h1>
+        <h1 tabIndex={-1}><span className="gradient-text">{text.taglineAccent}</span><span>{text.taglineMain}</span></h1>
         <p className="lede">{text.intro}</p>
-        {authError && <p className="error" role="alert">{text.authError}</p>}
+        {authError && <StatusMessage kind="error">{text.authError}</StatusMessage>}
         <a className="primary" href={`/auth/login?locale=${locale}&returnTo=/${locale}/app`}>{text.access}<span aria-hidden="true">↗</span></a>
       </div>
       <MarketPreview locale={locale} />

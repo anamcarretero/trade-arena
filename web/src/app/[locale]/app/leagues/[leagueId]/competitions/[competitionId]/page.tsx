@@ -5,6 +5,7 @@ import {LocaleSwitcher} from "@/components/locale-switcher";
 import {TradingPanel} from "@/components/trading-panel";
 import {competitionDashboard, competitionPortfolio, competitionRanking, leagueCompetitions, ownAccount} from "@/lib/api";
 import {copy, isLocale} from "@/lib/i18n";
+import {StatusMessage} from "@/components/status-message";
 
 export default async function CompetitionPage({params, searchParams}: {
   params: Promise<{locale: string; leagueId: string; competitionId: string}>;
@@ -27,23 +28,23 @@ export default async function CompetitionPage({params, searchParams}: {
     competitionPortfolio(leagueId, competitionId), competitionRanking(leagueId, competitionId)
   ]);
 
-  return <main className="app-shell arena-shell competition-dashboard-page">
+  return <main id="main-content" className="app-shell arena-shell competition-dashboard-page" tabIndex={-1}>
     <header className="topbar app-topbar">
       <Link className="wordmark" href={`/${rawLocale}/app`}>TRADE<span>ARENA</span></Link>
-      <div className="app-nav"><Link href={`/${rawLocale}/app/leagues/${encodeURIComponent(leagueId)}`}>{text.backToLeague}</Link><LocaleSwitcher locale={rawLocale} suffix={`/app/leagues/${leagueId}/competitions/${competitionId}`}/></div>
+      <nav className="app-nav" aria-label={text.appNavigation}><Link href={`/${rawLocale}/app/leagues/${encodeURIComponent(leagueId)}`}>{text.backToLeague}</Link><LocaleSwitcher locale={rawLocale} suffix={`/app/leagues/${leagueId}/competitions/${competitionId}`}/></nav>
     </header>
     <section className="competition-dashboard-hero">
-      <div><p className="eyebrow">{text.competitionDashboard} · {competition.status}</p><h1>{competition.name}</h1><p>{formatDate(competition.starts_at, rawLocale)} — {formatDate(competition.ends_at, rawLocale)} · XNYS</p></div>
-      <span className={`data-status ${dashboard.data_status}`}>{dashboard.data_status}</span>
+      <div><p className="eyebrow">{text.competitionDashboard} · {competition.status}</p><h1 tabIndex={-1}>{competition.name}</h1><p>{formatDate(competition.starts_at, rawLocale)} — {formatDate(competition.ends_at, rawLocale)} · XNYS</p></div>
+      <span className={`data-status ${dashboard.data_status}`}>{text.dashboardStatus[dashboard.data_status]}</span>
     </section>
 
-    {state.error && <p className="error arena-message" role="alert">{text.leagueActionError}</p>}
-    {state.status && <p className="success arena-message" role="status">{state.status === "reported-trade-created" ? text.reportedTradeCreatedStatus : state.status === "reported-trade-corrected" ? text.reportedTradeCorrectedStatus : state.status === "order-cancelled" ? text.orderCancelledStatus : text.orderSubmittedStatus}</p>}
+    {state.error && <StatusMessage kind="error" className="arena-message">{text.leagueActionError}</StatusMessage>}
+    {state.status && <StatusMessage kind="status" className="arena-message">{state.status === "reported-trade-created" ? text.reportedTradeCreatedStatus : state.status === "reported-trade-corrected" ? text.reportedTradeCorrectedStatus : state.status === "order-cancelled" ? text.orderCancelledStatus : text.orderSubmittedStatus}</StatusMessage>}
 
     <CompetitionDashboardView locale={rawLocale} dashboard={dashboard}/>
 
     {portfolio && ranking && <section className="dashboard-private-panel">
-      <p className="eyebrow">Private / Own data</p>
+      <p className="eyebrow">{text.privateOwnData}</p>
       <TradingPanel locale={rawLocale} leagueId={leagueId} competitionId={competitionId} portfolio={portfolio} ranking={ranking}/>
     </section>}
   </main>;

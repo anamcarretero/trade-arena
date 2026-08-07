@@ -13,7 +13,8 @@ página pública de planes y TA-034 la creación e inicio de competiciones con
 fixtures, historial, ranking e incorporación tardía, incluida su ampliación de
 cantidades fraccionadas, ejecuciones simuladas declaradas y correcciones
 compensatorias. TA-036 completa notificaciones, exportación y borrado desde la
-PWA. La siguiente entrega es TA-037.
+PWA, TA-037 el dashboard privado y TA-038 la accesibilidad WCAG 2.2 AA con los
+recorridos E2E de dos participantes. La siguiente entrega es TA-039.
 
 ```text
 Next.js PWA/BFF — Vercel
@@ -210,10 +211,10 @@ bancaria.
 1. TA-036, completado: incorporar el centro privado de notificaciones y los
    flujos de exportación completa y borrado confirmado, con autorización,
    anonimización, revocación de sesiones y conservación financiera en Python.
-2. TA-037: incorporar el dashboard privado completo de competición descrito a
-   continuación.
-3. TA-038: completar accesibilidad WCAG 2.2 AA y E2E de dos participantes sobre
-   los recorridos críticos.
+2. TA-037, completado: incorporar el dashboard privado completo de competición
+   descrito a continuación.
+3. TA-038, completado: accesibilidad WCAG 2.2 AA y E2E de dos participantes
+   sobre los recorridos críticos.
 
 **Salida:** la PWA cubre los flujos previstos para beta y supera la validación
 de accesibilidad y los recorridos E2E antes del despliegue integrado.
@@ -255,6 +256,33 @@ ausencias de mercado, digest/idempotencia, badges e insights deterministas;
 contrato equivalente en memoria/PostgreSQL, migración vacía y desde 009,
 privacidad estructural, OpenAPI/TypeScript sincronizados, render ES/EN,
 navegación y E2E de dos participantes y competición terminada.
+
+#### TA-038 — Accesibilidad WCAG 2.2 AA y E2E crítico
+
+1. Auditar y corregir semántica, landmarks, jerarquía, idioma ES/EN,
+   navegación por teclado, salto al contenido, foco visible y restauración del
+   foco tras navegar.
+2. Hacer perceptibles validación, errores, confirmaciones, carga, fallo de API,
+   datos incompletos y cotizaciones ausentes mediante texto y regiones vivas.
+3. Mantener contraste AA, objetivos táctiles, reflujo móvil sin scroll
+   horizontal y preferencia de movimiento reducido; ofrecer alternativas
+   textuales para gráficas, barras y estados visuales.
+4. Integrar axe con Playwright sobre las rutas públicas y privadas críticas en
+   español e inglés, conservando una revisión manual explícita de los aspectos
+   que una herramienta automática no puede demostrar.
+5. Ejecutar con contextos separados el flujo propietario→liga→invitación y
+   aceptación→competición→orden/operación declarada→dashboard, ranking,
+   cartera propia y actividad.
+6. Usar datos señuelo distintos para probar que ninguna sesión recibe
+   cantidades, precios, importes, comisiones, efectivo, patrimonio, órdenes o
+   ledger del otro participante; conservar los importes solo en la cartera
+   propia autorizada y `show_amounts` en cualquier salida pública.
+
+**Aceptación TA-038:** axe sin violaciones A/AA en el conjunto auditado,
+recorrido completo de dos participantes, teclado/foco/validación/movimiento
+reducido comprobados, estados degradados cubiertos, privacidad negativa y
+responsive móvil. No incluye infraestructura, staging, Stripe, Friends/Club,
+brokers ni mercado de producción.
 
 ### Fase 3.6 — TA-039: infraestructura y entrega continua
 
@@ -301,7 +329,8 @@ ejecuciones, apuntes o snapshots.
 1. Activar derechos Friends/Club y límites transaccionales.
 2. Integrar Stripe Checkout, portal y webhooks firmados e idempotentes.
 3. Completar observabilidad, rate limits, seguridad de sesión, CORS/CSRF,
-   carga, restauración, accesibilidad WCAG 2.2 AA y respuesta a incidentes.
+   carga, restauración, revalidación de accesibilidad previa a beta y respuesta
+   a incidentes.
 4. Bloquear pagos y apertura pública hasta disponer de licencia de mercado,
    DPA, DPIA/ROPA, textos ES/EN y aprobación legal para España/UE.
 
@@ -327,6 +356,9 @@ ejecuciones, apuntes o snapshots.
 - TA-037 verifica estados completo, provisional, incompleto y vacío, series
   XNYS, snapshots/badges idempotentes, operaciones saneadas, contrato sin
   importes ajenos y dashboard responsive ES/EN.
+- TA-038 ejecuta axe WCAG 2.2 A/AA sobre rutas críticas ES/EN y comprueba
+  teclado, foco, formularios, movimiento reducido, reflujo, estados degradados
+  y privacidad financiera con dos contextos de navegador aislados.
 - E2E de acceso, invitación, competición, orden, ejecución y ranking con dos
   participantes.
 - Pruebas negativas de autorización, edad, sesión revocada, invitación ajena,
@@ -364,17 +396,18 @@ Secuencia recomendada:
 4. TA-033, página pública de planes;
 5. TA-034–TA-035, competiciones, cartera y ranking;
 6. ampliación TA-035, fracciones y ejecuciones registradas manualmente;
-7. TA-036 completado; TA-037, dashboard completo de competición;
-8. TA-038, accesibilidad de la PWA;
-9. TA-039, infraestructura y staging;
+7. TA-036 y TA-037 completados, incluido el dashboard de competición;
+8. TA-038 completado, accesibilidad y E2E crítico de dos participantes;
+9. TA-039, siguiente fase: infraestructura y staging;
 10. mercado y jobs;
 11. Stripe y preparación de beta.
 
 Cada `/goal` debe expresar resultado, límites y verificación, y referenciar
 este documento en vez de copiar toda la especificación. TA-032 conserva los
 artefactos de instalación, el BFF y el sistema visual de TA-031. El siguiente
-objetivo es TA-037. TA-036 ya activa notificaciones, exportación y borrado desde
-la PWA. No activa importación de brokers, Friends, Club ni facturación.
+objetivo es TA-039. TA-036 activa notificaciones, exportación y borrado; TA-037
+aporta el dashboard y TA-038 cierra accesibilidad y E2E desde la PWA. No activan
+importación de brokers, Friends, Club ni facturación.
 
 ## 6. Supuestos y puertas
 

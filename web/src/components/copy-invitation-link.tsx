@@ -14,7 +14,12 @@ export function CopyInvitationLink({path, label, copiedLabel}: {
     setCopied(true);
   }
 
-  return <button className="copy-button" type="button" onClick={copy} aria-live="polite">
-    {copied ? copiedLabel : label}
-  </button>;
+  return <>
+    <button className="copy-button" type="button" onClick={copy}>
+      {copied ? copiedLabel : label}
+    </button>
+    <span className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+      {copied ? copiedLabel : ""}
+    </span>
+  </>;
 }
