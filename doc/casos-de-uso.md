@@ -224,8 +224,9 @@ cloud, mercado licenciado, jobs, brokers, Friends, Club, Stripe ni facturación.
    competición; cualquier combinación ajena responde `404`. Un borrador devuelve
    identidad y `data_status=empty` sin crear cartera ni snapshot.
 2. Para cada participante se generan jornadas reales XNYS desde `joined_at`.
-   Los cierres usan las 16:00 de Nueva York y la sesión actual puede aparecer
-   provisional. Fin de semana y festivo no crean puntos.
+   Los cierres usan las 16:00 de Nueva York y la sesión actual aparece
+   provisional únicamente desde la apertura de las 09:30; antes se mantiene el
+   cierre anterior. Fin de semana y festivo no crean puntos.
 3. La proyección reproduce ejecuciones, comisiones y movimientos
    compensatorios. Una cotización ausente no se rellena: la jornada permanece
    visible pero incompleta y ningún retorno parcial se etiqueta como definitivo.

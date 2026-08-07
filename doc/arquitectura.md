@@ -334,7 +334,9 @@ privadas mantienen `404` para recursos ajenos.
 
 TA-037 añade una proyección de aplicación separada del ranking puntual. Recorre
 las jornadas XNYS desde el `rules_snapshot`, usa las 16:00 de Nueva York como
-cierre canónico y admite un punto provisional para la sesión actual. Reproduce
+cierre canónico y admite un punto provisional para la sesión actual solo desde
+la apertura regular de las 09:30; antes conserva como último punto el cierre de
+la jornada anterior. Reproduce
 solo ejecuciones efectivas, incluidas comisiones y compensaciones, desde
 `joined_at`. Para una posición abierta exige una cotización de esa misma sesión:
 no arrastra cierres ni usa el precio declarado como sustituto. Un hueco marca
