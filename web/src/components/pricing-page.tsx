@@ -23,9 +23,9 @@ export function PricingPage({locale, authenticated}: {locale: Locale; authentica
           </div>
           <h2>{plan.name}</h2>
           <p>{plan.description}</p>
+          <h3>{text.limitsLabel}</h3>
+          <ul>{plan.features.map(feature => <li key={feature}><span aria-hidden="true">✓</span>{feature}</li>)}</ul>
           {available ? <>
-            <h3>{text.limitsLabel}</h3>
-            <ul>{plan.features.map(feature => <li key={feature}><span aria-hidden="true">✓</span>{feature}</li>)}</ul>
             <Link className="primary pricing-cta" href={cta.href}>{cta.label}<span aria-hidden="true">→</span></Link>
           </> : <p className="unavailable-note" aria-label={`${plan.name}: ${text.unavailable}`}>{text.unavailable}</p>}
         </article>;

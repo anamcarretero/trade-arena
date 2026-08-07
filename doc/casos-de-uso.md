@@ -90,6 +90,9 @@ BFF no cambia el `404` de ligas ajenas.
    la aplicación si ya existe una sesión `HttpOnly` válida para el BFF.
 3. Friends y Club se muestran para anticipar la evolución del producto, pero
    con «Próximamente»/«Coming soon» y sin una acción de compra habilitada.
+   Friends comunica hasta cinco jugadores, competiciones de hasta un año y
+   capital virtual inicial configurable; Club comunica hasta veinte jugadores
+   y hasta cinco ligas activas.
 4. TA-033 no crea suscripciones, cobros ni derechos nuevos; esas capacidades
    siguen perteneciendo a la Fase 5.
 

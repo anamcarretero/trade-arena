@@ -221,7 +221,10 @@ sesión opaca ni ninguna credencial interna.
 TA-033 añade `/{locale}/pricing` como página pública responsive dentro de la
 misma PWA y un enlace desde su navegación pública. Muestra Free con una liga
 activa, dos plazas y 3.000 USD iniciales por competición; Friends y Club figuran
-como «Próximamente», sin precios, Checkout ni concesión de derechos. La llamada
+como «Próximamente», sin precios, Checkout ni concesión de derechos. Friends
+anuncia hasta cinco jugadores, competiciones de hasta un año y capital virtual
+inicial configurable; Club anuncia hasta veinte jugadores y cinco ligas
+activas. La llamada
 a la acción se resuelve en el servidor hacia el acceso o `/{locale}/app` según
 la cookie de sesión `HttpOnly`. La facturación y la activación de esos planes
 continúan reservadas para la Fase 5.
