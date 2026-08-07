@@ -8,6 +8,11 @@ test("pricing is public, bilingual and reachable from public navigation", async 
   await expect(page.getByRole("listitem").filter({hasText: "Una liga activa"})).toBeVisible();
   await expect(page.getByRole("listitem").filter({hasText: "Dos plazas"})).toBeVisible();
   await expect(page.getByRole("listitem").filter({hasText: "3.000 USD de capital virtual inicial por competición"})).toBeVisible();
+  await expect(page.getByRole("listitem").filter({hasText: "Hasta cinco jugadores"})).toBeVisible();
+  await expect(page.getByRole("listitem").filter({hasText: "Competiciones de hasta un año"})).toBeVisible();
+  await expect(page.getByRole("listitem").filter({hasText: "Capital virtual inicial configurable"})).toBeVisible();
+  await expect(page.getByRole("listitem").filter({hasText: "Hasta 20 jugadores"})).toBeVisible();
+  await expect(page.getByRole("listitem").filter({hasText: "Hasta cinco ligas activas"})).toBeVisible();
   await expect(page.getByText("Próximamente", {exact: true})).toHaveCount(2);
   await expect(page.getByRole("link", {name: /Empezar con Free/})).toHaveAttribute(
     "href", "/auth/login?locale=es&returnTo=/es/app"

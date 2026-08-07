@@ -23,7 +23,7 @@ export const pricingCopy = {
     freeCta: "Empezar con Free",
     appCta: "Ir a la aplicación",
     unavailable: "Aún no disponible",
-    limitsLabel: "Límites incluidos",
+    limitsLabel: "Qué incluye",
     plans: [
       {
         name: "Free",
@@ -38,14 +38,21 @@ export const pricingCopy = {
       {
         name: "Friends",
         availability: "coming-soon",
-        description: "Publicaremos los detalles antes de su lanzamiento.",
-        features: []
+        description: "Más espacio y flexibilidad para competir con tu grupo de amigos.",
+        features: [
+          "Hasta cinco jugadores",
+          "Competiciones de hasta un año",
+          "Capital virtual inicial configurable"
+        ]
       },
       {
         name: "Club",
         availability: "coming-soon",
-        description: "Publicaremos los detalles antes de su lanzamiento.",
-        features: []
+        description: "Capacidad para comunidades que organizan varias ligas privadas.",
+        features: [
+          "Hasta 20 jugadores",
+          "Hasta cinco ligas activas"
+        ]
       }
     ]
   },
@@ -62,7 +69,7 @@ export const pricingCopy = {
     freeCta: "Start with Free",
     appCta: "Go to the app",
     unavailable: "Not available yet",
-    limitsLabel: "Included limits",
+    limitsLabel: "What's included",
     plans: [
       {
         name: "Free",
@@ -77,14 +84,21 @@ export const pricingCopy = {
       {
         name: "Friends",
         availability: "coming-soon",
-        description: "We will publish the details before launch.",
-        features: []
+        description: "More room and flexibility to compete with your group of friends.",
+        features: [
+          "Up to five players",
+          "Competitions lasting up to one year",
+          "Configurable starting virtual capital"
+        ]
       },
       {
         name: "Club",
         availability: "coming-soon",
-        description: "We will publish the details before launch.",
-        features: []
+        description: "Capacity for communities running several private leagues.",
+        features: [
+          "Up to 20 players",
+          "Up to five active leagues"
+        ]
       }
     ]
   }

@@ -5,6 +5,7 @@ import {ownAccount, ownInvitations, ownLeagues} from "@/lib/api";
 import {copy, isLocale} from "@/lib/i18n";
 import {invitationPath} from "@/lib/invitations";
 import {canCreateFreeLeague, occupiedSeats} from "@/lib/league-state";
+import {pricingCopy} from "@/lib/pricing";
 import {acceptInvitation, createLeague} from "./leagues/actions";
 import {StatusMessage} from "@/components/status-message";
 
@@ -20,17 +21,18 @@ export default async function Dashboard({params, searchParams}: {
   const [leagues, invitations] = await Promise.all([ownLeagues(), ownInvitations()]);
   if (!leagues || !invitations) redirect(`/auth/login?locale=${rawLocale}&returnTo=/${rawLocale}/app`);
   const text = copy[rawLocale];
+  const pricingText = pricingCopy[rawLocale];
   const error = (await searchParams).error;
   const canCreate = canCreateFreeLeague(leagues);
 
   return <main id="main-content" className="app-shell arena-shell" tabIndex={-1}>
     <header className="topbar app-topbar">
       <Link className="wordmark" href={`/${rawLocale}/app`}>TRADE<span>ARENA</span></Link>
-      <nav className="app-nav" aria-label={text.appNavigation}><Link href={`/${rawLocale}/app/notifications`}>{text.notifications}</Link><Link href={`/${rawLocale}/app/account`}>{text.account}</Link><Link href={`/${rawLocale}/app/profile`}>{text.editProfile}</Link><LocaleSwitcher locale={rawLocale} suffix="/app" /></nav>
+      <nav className="app-nav" aria-label={text.appNavigation}><Link href={`/${rawLocale}/pricing`}>{pricingText.pricingNav}</Link><Link href={`/${rawLocale}/app/notifications`}>{text.notifications}</Link><Link href={`/${rawLocale}/app/account`}>{text.account}</Link><Link href={`/${rawLocale}/app/profile`}>{text.editProfile}</Link><LocaleSwitcher locale={rawLocale} suffix="/app" /></nav>
     </header>
 
     <section className="arena-hero">
-      <div><p className="eyebrow">{account.user.email}</p><h1 tabIndex={-1}>{text.arenaHome}</h1><p>{text.arenaIntro}</p><nav className="mobile-account-nav" aria-label={text.accountNavigation}><Link href={`/${rawLocale}/app/notifications`}>{text.notifications}</Link><Link href={`/${rawLocale}/app/account`}>{text.account}</Link></nav></div>
+      <div><p className="eyebrow">{account.user.email}</p><h1 tabIndex={-1}>{text.arenaHome}</h1><p>{text.arenaIntro}</p><nav className="mobile-account-nav" aria-label={text.accountNavigation}><Link href={`/${rawLocale}/pricing`}>{pricingText.pricingNav}</Link><Link href={`/${rawLocale}/app/notifications`}>{text.notifications}</Link><Link href={`/${rawLocale}/app/account`}>{text.account}</Link><Link href={`/${rawLocale}/app/profile`}>{text.editProfile}</Link></nav></div>
       <form action="/auth/logout" method="post"><button className="text-button" type="submit">{text.logout}</button></form>
     </section>
 
@@ -54,7 +56,7 @@ export default async function Dashboard({params, searchParams}: {
     </section>}
 
     <section className="arena-section">
-      <div className="section-heading"><p className="eyebrow">TradeArena / Leagues</p><h2>{text.yourLeagues}</h2></div>
+      <div className="section-heading league-list-heading"><p className="eyebrow">TradeArena / Leagues</p><h2>{text.yourLeagues}</h2></div>
       {leagues.length === 0 ? <p className="empty-copy">{text.noLeagues}</p> : <div className="league-grid">
         {leagues.map(league => <article className="league-card" key={league.id}>
           <div className="league-card-top"><span className="status-pill live"><i aria-hidden="true"/>{text.privateLeague}</span><span>{text.freePlan}</span></div>

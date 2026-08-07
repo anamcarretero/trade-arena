@@ -29,6 +29,27 @@ describe("public pricing", () => {
     }
   });
 
+  it("publishes the planned Friends and Club limits in both languages", () => {
+    expect(pricingCopy.es.plans[1].features).toEqual([
+      "Hasta cinco jugadores",
+      "Competiciones de hasta un año",
+      "Capital virtual inicial configurable"
+    ]);
+    expect(pricingCopy.es.plans[2].features).toEqual([
+      "Hasta 20 jugadores",
+      "Hasta cinco ligas activas"
+    ]);
+    expect(pricingCopy.en.plans[1].features).toEqual([
+      "Up to five players",
+      "Competitions lasting up to one year",
+      "Configurable starting virtual capital"
+    ]);
+    expect(pricingCopy.en.plans[2].features).toEqual([
+      "Up to 20 players",
+      "Up to five active leagues"
+    ]);
+  });
+
   it("sends the Free call to sign-in or the app according to session state", () => {
     expect(pricingCta("es", false)).toEqual({
       href: "/auth/login?locale=es&returnTo=/es/app",

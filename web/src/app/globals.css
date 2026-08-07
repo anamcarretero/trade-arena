@@ -1126,6 +1126,12 @@ a {
   margin: 0;
 }
 
+.league-list-heading {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: .45rem;
+}
+
 .section-heading h2,
 .create-league-panel h2,
 .admin-panel h2 {

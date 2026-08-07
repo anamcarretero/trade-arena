@@ -38,6 +38,10 @@ Pages seguirán funcionando hasta la retirada deliberada de la Fase 7.
   FastAPI. Las reglas financieras no se duplican en TypeScript.
 - El plan Free ofrece una liga activa, dos plazas y capital virtual inicial
   fijo de 3.000 USD por competición.
+- Friends ofrecerá hasta cinco jugadores, competiciones de hasta un año y
+  capital virtual inicial configurable. Club ofrecerá hasta veinte jugadores
+  y hasta cinco ligas activas. Ambos siguen sin precio ni activación hasta la
+  Fase 5.
 - Las cantidades de acciones son decimales positivas con hasta ocho decimales.
   No hay ejecución parcial: una orden, aunque sea fraccionada, se ejecuta por
   toda su cantidad o no se ejecuta.
