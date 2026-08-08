@@ -15,6 +15,12 @@ venv/
 .env
 !.env.example
 backups/
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/*.tfplan
+infra/**/terraform.tfvars
+!infra/**/terraform.tfvars.example
 
 # Dependencias y artefactos de Next.js.
 web/node_modules/
@@ -25,3 +31,4 @@ web/.env*
 web/coverage/
 web/test-results/
 web/playwright-report/
+web/.vercel/

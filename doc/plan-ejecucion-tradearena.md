@@ -14,7 +14,9 @@ fixtures, historial, ranking e incorporación tardía, incluida su ampliación d
 cantidades fraccionadas, ejecuciones simuladas declaradas y correcciones
 compensatorias. TA-036 completa notificaciones, exportación y borrado desde la
 PWA, TA-037 el dashboard privado y TA-038 la accesibilidad WCAG 2.2 AA con los
-recorridos E2E de dos participantes. La siguiente entrega es TA-039.
+recorridos E2E de dos participantes. TA-039 está en curso: IaC, CI/CD y
+runbooks están versionados, pero staging aún requiere aplicación autorizada,
+smoke remoto y restauración ensayada. La Fase 4 es la siguiente tras cerrarlo.
 
 ```text
 Next.js PWA/BFF — Vercel
@@ -290,6 +292,9 @@ brokers ni mercado de producción.
 
 ### Fase 3.6 — TA-039: infraestructura y entrega continua
 
+**Estado:** en curso. Implementación y validación local/dry-run en esta rama;
+no equivale a staging desplegado ni probado.
+
 1. Definir como código Artifact Registry, Cloud Run, Scheduler, IAM, Secret
    Manager, Neon y la configuración necesaria de Vercel.
 2. CI por PR: Python, TypeScript, lint, unitarias, contrato OpenAPI,
@@ -304,7 +309,8 @@ brokers ni mercado de producción.
    cada entorno soportado.
 
 **Salida:** staging reproducible y procedimiento probado de despliegue y
-rollback; producción continúa cerrada.
+rollback; producción continúa cerrada. No se considera alcanzada hasta ejecutar
+con credenciales el despliegue, los smoke tests y una restauración aislada.
 
 ### Fase 4 — Mercado y trabajos en segundo plano
 
@@ -402,14 +408,14 @@ Secuencia recomendada:
 6. ampliación TA-035, fracciones y ejecuciones registradas manualmente;
 7. TA-036 y TA-037 completados, incluido el dashboard de competición;
 8. TA-038 completado, accesibilidad y E2E crítico de dos participantes;
-9. TA-039, siguiente fase: infraestructura y staging;
-10. mercado y jobs;
+9. TA-039, fase en curso: infraestructura y staging;
+10. Fase 4, siguiente tras validar staging: mercado y jobs;
 11. Stripe y preparación de beta.
 
 Cada `/goal` debe expresar resultado, límites y verificación, y referenciar
 este documento en vez de copiar toda la especificación. TA-032 conserva los
-artefactos de instalación, el BFF y el sistema visual de TA-031. El siguiente
-objetivo es TA-039. TA-036 activa notificaciones, exportación y borrado; TA-037
+artefactos de instalación, el BFF y el sistema visual de TA-031. El objetivo
+activo es TA-039 y la Fase 4 queda a continuación. TA-036 activa notificaciones, exportación y borrado; TA-037
 aporta el dashboard y TA-038 cierra accesibilidad y E2E desde la PWA. No activan
 importación de brokers, Friends, Club ni facturación.
 

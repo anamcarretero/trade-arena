@@ -1,0 +1,4 @@
+# Crea el bucket de estado de forma deliberada siguiendo el runbook. No se
+# versiona ningún nombre real de proyecto o bucket.
+bucket = "replace-with-private-versioned-terraform-state-bucket"
+prefix = "tradearena/staging"

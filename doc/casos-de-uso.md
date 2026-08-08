@@ -14,7 +14,7 @@ añaden participante autenticado, propietario y administrador de liga. Sus
 recursos son privados y solo se exponen por `/api/v1` tras validar sesión y
 membresía activa.
 
-## 0. Flujos del producto nuevo hasta TA-038
+## 0. Flujos del producto nuevo hasta TA-039
 
 1. Identidad verifica un enlace de email de un solo uso o claims Google con
    emisor, audiencia y email verificado; después se emite una sesión propia.
@@ -317,23 +317,51 @@ lo eliminan al terminar.
 ### Flujo de desarrollo y preview de Fase 3
 
 1. Cada pull request instala Python 3.12 y las versiones exactas de
-   `requirements.txt`, levanta PostgreSQL 16 aislado, aplica las migraciones,
-   ejecuta toda la suite Python, construye y verifica la instalación Compose
-   desde cero, y genera el ranking histórico offline con datos ficticios en
-   salidas temporales. No requiere extractos reales ni secretos.
+   `requirements.txt`, levanta PostgreSQL 16 aislado, prueba migraciones sobre
+   esquema vacío y versión anterior, ejecuta Python, ranking offline, OpenAPI,
+   lint, tipos, unitarias web, build, Playwright, axe, Docker/Compose e IaC.
+   No requiere extractos reales ni secretos.
 2. La consolidación inicial se fusiona desde `codex/baseline-tradearena`; el
    trabajo TA-030 comienza después desde el `main` actualizado en otra rama.
 3. Un PR de interfaz obtiene una preview Vercel que consume fixtures o el API
    integrado de staging mediante el BFF; nunca abre una conexión del navegador
    a PostgreSQL.
-4. Si el PR cambia backend, persistencia o migraciones, CI crea una rama Neon
-   efímera, aplica todas las migraciones, ejecuta las pruebas de integración y
-   elimina la rama al cerrar el PR.
+4. Si el PR cambia backend, persistencia o migraciones y están configurados
+   `NEON_PROJECT_ID`/`NEON_API_KEY`, CI crea una rama Neon efímera con
+   caducidad, aplica migraciones, ejecuta integración y la elimina en `always()`.
+   Sin credenciales, esta ampliación queda omitida de forma visible y sigue
+   siendo obligatorio PostgreSQL 16 aislado.
 5. No se crea una API Cloud Run por PR. Tras fusionar en `main`, se despliega
    staging, se ejecutan smoke tests y solo entonces el cambio puede promoverse.
 6. Producción sigue bloqueada hasta superar revisión legal, licencia de mercado,
    DPA, restauración y seguridad. El ranking histórico continúa en GitHub Pages
    durante toda esta transición.
+
+### Entrega y operación de staging de TA-039
+
+1. `scripts/staging/bootstrap.sh plan` usa credenciales del entorno y genera un
+   plan Terraform sin crear recursos. `apply` exige frase explícita porque los
+   proveedores pueden tener coste.
+2. Después del apply, el operador carga valores en los nombres de Secret
+   Manager y el custom environment Vercel creados. Los valores no se imprimen,
+   versionan ni guardan en Terraform. Auth0 autoriza el origen HTTPS estable;
+   el repositorio no crea dominios.
+3. Tras un merge a `main`, GitHub obtiene GCP por OIDC restringido, publica el
+   backend por digest, ejecuta primero la migración, despliega la API y verifica
+   readiness, despliega después la PWA en `staging` y termina con smoke tests.
+4. Un fallo en cualquier etapa deja el workflow fallido. API y PWA pueden
+   volver a digest/deployment anterior compatible; el esquema no se baja. Las
+   contracciones usan expand/contract en un cambio posterior.
+5. `backup.sh` genera un dump privado verificable; `restore-drill.sh` exige una
+   base aislada distinta y vuelve a migrarla. `diagnose.sh` muestra estado,
+   ejecuciones y logs recientes sin recuperar secretos.
+6. `retire.sh` solo planifica por defecto. Aplicar exige confirmación, backup
+   comprobado y desactivar deliberadamente la protección del servicio; después
+   se revocan tokens externos según el runbook.
+
+TA-039 no añade outbox, jobs financieros, Massive, Stripe, brokers,
+importaciones ni producción. El código puede validarse localmente, pero staging
+no se declara desplegado hasta ejecutar smoke y restauración reales.
 
 ### Instalar o actualizar TradeArena
 

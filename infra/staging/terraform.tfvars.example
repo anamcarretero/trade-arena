@@ -1,0 +1,13 @@
+gcp_project_id          = "replace-with-dedicated-staging-project"
+github_repository      = "anamcarretero/trade-arena"
+auth0_domain           = "replace.eu.auth0.com"
+auth0_client_id        = "replace-with-auth0-client-id"
+vercel_team            = null
+vercel_staging_base_url = "https://replace-with-authorized-staging-origin.example"
+
+# Primer apply: solo cimientos, nombres de secretos y proveedores.
+deploy_runtime = false
+
+# Tras cargar secretos y publicar Dockerfile con publish-image.sh:
+# deploy_runtime = true
+# api_image = "europe-west3-docker.pkg.dev/PROJECT/tradearena/api@sha256:..."
