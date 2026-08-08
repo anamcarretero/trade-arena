@@ -14,9 +14,9 @@ if [[ -n "${DATABASE_URL:-}" && "${RESTORE_DATABASE_URL}" == "${DATABASE_URL}" ]
   exit 1
 fi
 
-PGDATABASE="${RESTORE_DATABASE_URL}" \
-  pg_restore --clean --if-exists --no-owner "${dump_file}"
+pg_restore --dbname="${RESTORE_DATABASE_URL}" \
+  --clean --if-exists --no-owner "${dump_file}"
 DATABASE_URL="${RESTORE_DATABASE_URL}" python3 -m tradearena migrate
-PGDATABASE="${RESTORE_DATABASE_URL}" psql -v ON_ERROR_STOP=1 -c \
+psql --dbname="${RESTORE_DATABASE_URL}" -v ON_ERROR_STOP=1 -c \
   "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1" >/dev/null
 echo "Restauración ensayada y migraciones verificadas en la base aislada."
